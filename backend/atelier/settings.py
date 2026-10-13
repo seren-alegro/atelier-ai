@@ -42,9 +42,9 @@ SETTINGS: list[Setting] = [
     Setting(
         key="steps",
         label="스텝 수",
-        description="그림을 다듬는 반복 횟수예요. Anima는 50으로 고정하는 게 무난해요.",
+        description="그림을 다듬는 반복 횟수예요. Anima 공식 사양은 50 스텝입니다.",
         recommended=50,
-        min=1,
+        min=20,
         max=50,
     ),
     Setting(
@@ -121,3 +121,34 @@ def get_setting(key: str) -> Setting | None:
 def defaults() -> dict:
     """모든 설정의 추천값 딕셔너리."""
     return {s.key: s.recommended for s in SETTINGS}
+
+
+def validate(params: dict) -> dict[str, str]:
+    """params를 SETTINGS 기준으로 검증한다.
+
+    반환: {설정키: 에러메시지}. 빈 dict면 유효함.
+    """
+    errors: dict[str, str] = {}
+    for key, value in params.items():
+        s = get_setting(key)
+        if s is None:
+            errors[key] = f"알 수 없는 설정입니다: {key}"
+            continue
+        if s.kind == "number":
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                errors[key] = f"'{s.label}'은(는) 숫자여야 해요."
+            elif ((s.min is not None and value < s.min)
+                    or (s.max is not None and value > s.max)):
+                lo = "" if s.min is None else str(s.min)
+                hi = "" if s.max is None else str(s.max)
+                errors[key] = f"'{s.label}'은(는) {lo}~{hi} 범위여야 해요."
+        elif s.kind == "choice":
+            if value not in s.options:
+                errors[key] = f"'{s.label}'은(는) 다음 중 하나여야 해요: {', '.join(s.options)}"
+        elif s.kind == "text":
+            if not isinstance(value, str):
+                errors[key] = f"'{s.label}'은(는) 문자열이어야 해요."
+        elif s.kind == "toggle":
+            if not isinstance(value, bool):
+                errors[key] = f"'{s.label}'은(는) 참/거짓이어야 해요."
+    return errors
