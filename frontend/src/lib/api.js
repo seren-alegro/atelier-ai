@@ -26,10 +26,15 @@ export async function fetchSettingsMeta() {
 
 /** POST /api/generate — job 생성 후 폴링으로 완료 대기, 결과 URL 목록 반환 */
 export async function requestGenerate(params, mode = 'txt2img', image = null, mask = null) {
+  // loras는 settings 검증 대상이 아니므로 params에서 분리해 별도 필드로 전달.
+  // 파이프라인의 LoRA 적용 지원 전까지 백엔드는 무시한다.
+  const { loras, ...rest } = params;
+  const body = { mode, params: rest, image, mask };
+  if (loras) body.loras = loras;
   const res = await fetch(API_BASE + '/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, params, image, mask }),
+    body: JSON.stringify(body),
   });
   if (res.status === 422) {
     const err = await res.json().catch(() => ({}));
@@ -51,5 +56,54 @@ export async function requestGenerate(params, mode = 'txt2img', image = null, ma
     if (job.status === 'error') {
       throw new Error(job.error || '생성 중 오류가 발생했어요.');
     }
+  }
+}
+
+/** GET /api/models — 실패 시 null */
+export async function fetchModels() {
+  try {
+    return await getJson('/api/models');
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/models/active — 활성 체크포인트 전환 */
+export async function setActiveModel(name) {
+  const res = await fetch(API_BASE + '/api/models/active', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || '모델 전환에 실패했어요.');
+  }
+  return await res.json();
+}
+
+/** DELETE /api/models/{name} */
+export async function deleteModel(name) {
+  const encoded = name.split('/').map(encodeURIComponent).join('/');
+  const res = await fetch(API_BASE + '/api/models/' + encoded, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || '삭제에 실패했어요.');
+  }
+  return await res.json();
+}
+
+/** POST /api/models/refresh — 실패 시 null */
+export async function refreshModels() {
+  try {
+    const res = await fetch(API_BASE + '/api/models/refresh', {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch {
+    return null;
   }
 }

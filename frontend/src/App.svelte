@@ -3,12 +3,14 @@
   import { store, initStore } from './lib/store.svelte.js';
   import GenerateTab from './lib/GenerateTab.svelte';
   import InpaintTab from './lib/InpaintTab.svelte';
+  import ModelsTab from './lib/ModelsTab.svelte';
   import SettingsPanel from './lib/SettingsPanel.svelte';
 
   let tab = $state('generate');
   const tabs = [
     { id: 'generate', label: '생성' },
     { id: 'inpaint', label: '인페인트' },
+    { id: 'models', label: '모델' },
     { id: 'settings', label: '설정' },
   ];
 
@@ -43,6 +45,8 @@
     <GenerateTab />
   {:else if tab === 'inpaint'}
     <InpaintTab />
+  {:else if tab === 'models'}
+    <ModelsTab />
   {:else}
     <SettingsPanel />
   {/if}

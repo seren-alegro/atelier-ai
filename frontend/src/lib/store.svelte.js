@@ -17,6 +17,8 @@ export async function initStore() {
   store.apiOnline = remote !== null;
   const values = {};
   for (const s of list) values[s.key] = s.recommended;
+  // LoRA 선택 상태 (settings 검증 대상이 아님). {이름: {enabled, strength}}
+  if (!values.loras) values.loras = {};
   store.values = values;
   store.loaded = true;
 }
