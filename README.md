@@ -49,6 +49,18 @@ npm run dev
 Tauri 네이티브 빌드(`.deb` / `.dmg` / `.msi`)는 개발 머신에서 직접 한다.
 순서와 필요 패키지는 `src-tauri/README.md`에 정리되어 있다.
 
+## 문제 해결
+
+| 증상 | 대처 |
+|---|---|
+| UI에 "기본값 사용 중" 배지가 뜬다 | 백엔드가 꺼져 있다. 터미널에서 백엔드를 먼저 실행한다 |
+| "모델이 로드되지 않았어요" (503) | `~/.atelier-ai/models/`에 체크포인트(`.safetensors`)가 있는지 확인. 모델 탭에서도 확인 가능 |
+| "Python을 찾지 못했습니다" | Python 3.10+ 설치. Windows는 python.org에서 설치 후 `py -3 --version` 확인 |
+| 포트 8079가 이미 사용 중이라는 오류 | 이미 백엔드가 돌고 있다. 기존 프로세스를 끄거나 그대로 쓴다 |
+| 생성 중 오류 / 화면이 멈춘다 | VRAM 부족일 수 있다. 해상도나 배치를 낮춰본다 |
+| `npm run dev`가 안 된다 | Node.js 18+ 확인 후 `rm -rf node_modules && npm install` |
+| Tauri 빌드가 의존성에서 실패한다 | `src-tauri/README.md`의 시스템 패키지 목록 확인 |
+
 ## 라이선스
 
 MIT
