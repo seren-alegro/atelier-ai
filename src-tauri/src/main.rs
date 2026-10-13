@@ -11,7 +11,9 @@
 //! 2. 실행 파일 옆의 `atelier-backend` 사이드카 바이너리
 //!    (향후 PyInstaller 등으로 얼린 배포용 바이너리 자리)
 //! 3. 개발 레이아웃 — 실행 파일 기준 `../../backend` 디렉토리가 있으면
-//!    `python3 -m uvicorn atelier.api.app:app` 실행
+//!    Python으로 `uvicorn atelier.api.app:app` 실행.
+//!    Windows에서는 `py -3` → `python` → `python3` 순으로,
+//!    Unix에서는 `python3` → `python` 순으로 탐색한다.
 //!
 //! 어떤 방법으로도 백엔드를 띄우지 못하면 앱은 그대로 실행되고,
 //! 프론트엔드는 내장 기본값(폴백) 모드로 동작한다.
@@ -30,6 +32,28 @@ struct SpawnSpec {
     program: String,
     args: Vec<String>,
     cwd: Option<PathBuf>,
+}
+
+/// Python 인터프리터 탐색.
+/// Windows: `py -3` → `python` → `python3`, Unix: `python3` → `python`.
+/// (프로그램, 앞에 붙일 인자) 형태로 반환한다. `--version`으로 실제 동작 확인.
+fn find_python() -> Option<(String, Vec<String>)> {
+    #[cfg(target_os = "windows")]
+    let candidates: &[(&str, &[&str])] = &[("py", &["-3"]), ("python", &[]), ("python3", &[])];
+    #[cfg(not(target_os = "windows"))]
+    let candidates: &[(&str, &[&str])] = &[("python3", &[]), ("python", &[])];
+
+    for (program, prefix) in candidates {
+        let mut check = Command::new(program);
+        check.args(*prefix).arg("--version");
+        if check.output().map(|o| o.status.success()).unwrap_or(false) {
+            return Some((
+                program.to_string(),
+                prefix.iter().map(|s| s.to_string()).collect(),
+            ));
+        }
+    }
+    None
 }
 
 fn find_backend() -> Option<SpawnSpec> {
@@ -65,21 +89,31 @@ fn find_backend() -> Option<SpawnSpec> {
     }
 
     // 3. 개발 레이아웃: <exe>/../../backend (src-tauri/target/{debug,release}/ 기준)
+    //    OS에 맞는 Python 탐색 (Windows: py -3 → python → python3)
     let dev_backend = exe_dir.join("../../backend");
     if dev_backend.join("pyproject.toml").is_file() {
-        return Some(SpawnSpec {
-            program: "python3".to_string(),
-            args: vec![
-                "-m".into(),
-                "uvicorn".into(),
-                "atelier.api.app:app".into(),
-                "--host".into(),
-                BACKEND_HOST.into(),
-                "--port".into(),
-                BACKEND_PORT.into(),
-            ],
-            cwd: Some(dev_backend),
-        });
+        if let Some((python, prefix)) = find_python() {
+            let mut args = prefix;
+            args.extend(
+                [
+                    "-m",
+                    "uvicorn",
+                    "atelier.api.app:app",
+                    "--host",
+                    BACKEND_HOST,
+                    "--port",
+                    BACKEND_PORT,
+                ]
+                .iter()
+                .map(|s| s.to_string()),
+            );
+            return Some(SpawnSpec {
+                program: python,
+                args,
+                cwd: Some(dev_backend),
+            });
+        }
+        eprintln!("[atelier] Python을 찾지 못했습니다. python.org에서 설치해주세요.");
     }
 
     None
