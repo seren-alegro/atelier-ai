@@ -92,6 +92,15 @@ SETTINGS: list[Setting] = [
         min=-1,
     ),
     Setting(
+        key="denoise_strength",
+        label="디노이즈 강도",
+        description="img2img·인페인트에서 원본을 얼마나 바꿀지 정해요. "
+                    "높을수록 원본에서 멀어지고, 낮을수록 원본을 유지해요.",
+        recommended=0.75,
+        min=0.0,
+        max=1.0,
+    ),
+    Setting(
         key="batch_size",
         label="한 번에 뽑는 장수",
         description="한 번에 몇 장을 뽑을지 정해요. 많을수록 VRAM을 많이 써요.",
