@@ -15,9 +15,8 @@
       const params = { ...store.values };
       const paths = await requestGenerate(params);
       results = paths;
-    } catch {
-      // TODO: POST /api/generate 백엔드 연동 후 실제 생성으로 교체
-      notice = '아직 백엔드와 연결되지 않았어요. (POST /api/generate 연동 TODO)';
+    } catch (e) {
+      notice = e.message || '생성 중 오류가 발생했어요.';
     } finally {
       busy = false;
     }
