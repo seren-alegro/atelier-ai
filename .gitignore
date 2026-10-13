@@ -5,3 +5,6 @@ outputs/
 *.pyc
 
 *.egg-info/
+
+# Rust / Tauri
+src-tauri/target/
