@@ -1,0 +1,1 @@
+{"$schema":"https://schema.tauri.app/config/2","app":{"windows":[{"height":800,"title":"Atelier AI","width":1280}]},"build":{"devUrl":"http://localhost:5173","frontendDist":"../frontend/dist"},"identifier":"ai.atelier.app","productName":"Atelier AI","version":"0.1.0"}

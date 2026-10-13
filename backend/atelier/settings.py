@@ -1,0 +1,123 @@
+"""생성 설정 정의.
+
+Atelier AI의 핵심 차별점: 모든 설정에 한국어 설명과 추천값을 붙인다.
+추천값은 Anima 계열 모델 기준 초안이며, 실측 후 조정한다.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class Setting:
+    key: str
+    label: str            # UI 표시 이름
+    description: str      # 초보자용 한국어 설명
+    recommended: object   # 추천값 (Anima 기준)
+    kind: str = "number"  # number | choice | text | toggle
+    min: float | None = None
+    max: float | None = None
+    options: list[str] = field(default_factory=list)
+    unit: str = ""
+
+
+SETTINGS: list[Setting] = [
+    Setting(
+        key="prompt",
+        label="프롬프트",
+        description="그리고 싶은 내용을 Danbooru식 태그로 적어주세요. "
+                    "쉼표로 구분하고, 앞에 적을수록 강하게 반영돼요.",
+        recommended="1girl, solo",
+        kind="text",
+    ),
+    Setting(
+        key="negative_prompt",
+        label="네거티브 프롬프트",
+        description="그리지 않았으면 하는 것을 적어주세요. "
+                    "손가락이 이상하게 나오는 게 싫으면 여기에 적어요.",
+        recommended="worst quality, low quality, bad anatomy",
+        kind="text",
+    ),
+    Setting(
+        key="steps",
+        label="스텝 수",
+        description="그림을 다듬는 반복 횟수예요. Anima는 50으로 고정하는 게 무난해요.",
+        recommended=50,
+        min=1,
+        max=50,
+    ),
+    Setting(
+        key="cfg_scale",
+        label="CFG 스케일",
+        description="프롬프트를 얼마나 빡빡하게 따를지 정해요. "
+                    "높을수록 프롬프트 충실, 낮을수록 AI 마음대로 자유로워져요. "
+                    "너무 높이면 색이 타고 깨져요.",
+        recommended=5.0,
+        min=1.0,
+        max=9.0,
+    ),
+    Setting(
+        key="sampler",
+        label="샘플러",
+        description="그림을 그려나가는 방식이에요. Anima는 SDE 계열이 잘 맞아요. "
+                    "er_sde가 기본 추천이에요.",
+        recommended="er_sde",
+        kind="choice",
+        options=["er_sde", "dpmpp_2m_sde_gpu", "dpmpp_2m_sde",
+                 "euler_ancestral", "dpmpp_2m_karras", "ddim"],
+    ),
+    Setting(
+        key="width",
+        label="가로",
+        description="그림의 가로 크기예요. 클수록 VRAM을 많이 써요.",
+        recommended=832,
+        min=256,
+        max=2048,
+    ),
+    Setting(
+        key="height",
+        label="세로",
+        description="그림의 세로 크기예요. 세로 그림엔 832x1216이 무난해요.",
+        recommended=1216,
+        min=256,
+        max=2048,
+    ),
+    Setting(
+        key="seed",
+        label="시드",
+        description="그림의 랜덤 씨앗이에요. -1이면 매번 바뀌고, "
+                    "숫자를 고정하면 같은 구도를 다시 뽑을 수 있어요.",
+        recommended=-1,
+        min=-1,
+    ),
+    Setting(
+        key="batch_size",
+        label="한 번에 뽑는 장수",
+        description="한 번에 몇 장을 뽑을지 정해요. 많을수록 VRAM을 많이 써요.",
+        recommended=1,
+        min=1,
+        max=8,
+    ),
+    Setting(
+        key="experimental_sampler",
+        label="실험실 샘플러",
+        description="실험적인 샘플러 모음이에요. Anima와의 궁합은 직접 돌려보셔야 해요. "
+                    "restart는 느리지만 깔끔하게, lcm/tcd는 몇 스텝 만에 뽑아요.",
+        recommended="restart",
+        kind="choice",
+        options=["restart", "sa_solver", "deis", "lcm", "tcd"],
+    ),
+]
+
+
+def get_setting(key: str) -> Setting | None:
+    for s in SETTINGS:
+        if s.key == key:
+            return s
+    return None
+
+
+def defaults() -> dict:
+    """모든 설정의 추천값 딕셔너리."""
+    return {s.key: s.recommended for s in SETTINGS}
