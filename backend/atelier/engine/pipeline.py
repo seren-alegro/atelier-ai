@@ -6,8 +6,8 @@
 - torch / diffusers는 각 메서드에서 lazy import하므로,
   이 모듈 자체는 GPU·torch 없이 import 가능하다.
 
-주의: strength(디노이즈 강도)는 아직 settings.py에 설정 항목이 없어
-파이프라인 기본값을 쓴다. settings.py에 항목이 추가되면 여기도 바꿀 것.
+주의: strength(디노이즈 강도)는 settings.py의 denoise_strength 항목을 쓴다.
+("strength" 키도 하위 호환으로 받는다.)
 """
 
 from __future__ import annotations
@@ -112,12 +112,13 @@ class Pipeline:
         return self._save(images, seed, "txt2img")
 
     def img2img(self, params: dict, image: str) -> list[str]:
-        """이미지 → 이미지. strength는 params에 없으면 기본값."""
+        """이미지 → 이미지. strength는 denoise_strength 설정값 사용."""
         from diffusers import AutoPipelineForImage2Image
         from PIL import Image
 
         p = dict(params)
-        strength = p.pop("strength", DEFAULT_IMG2IMG_STRENGTH)
+        strength = p.pop(
+            "denoise_strength", p.pop("strength", DEFAULT_IMG2IMG_STRENGTH))
         pipe, kwargs, seed = self._prepare(p, "sampler")
         i2i = AutoPipelineForImage2Image.from_pipe(
             pipe, trust_remote_code=False,
@@ -127,12 +128,14 @@ class Pipeline:
         return self._save(images, seed, "img2img")
 
     def inpaint(self, params: dict, image: str, mask: str) -> list[str]:
-        """인페인트. image 원본, mask 흰색=다시 그릴 영역."""
+        """인페인트. image 원본, mask 흰색=다시 그릴 영역.
+        strength는 denoise_strength 설정값 사용."""
         from diffusers import AutoPipelineForInpainting
         from PIL import Image
 
         p = dict(params)
-        strength = p.pop("strength", DEFAULT_INPAINT_STRENGTH)
+        strength = p.pop(
+            "denoise_strength", p.pop("strength", DEFAULT_INPAINT_STRENGTH))
         pipe, kwargs, seed = self._prepare(p, "sampler")
         inp = AutoPipelineForInpainting.from_pipe(
             pipe, trust_remote_code=False,

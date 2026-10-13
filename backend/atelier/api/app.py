@@ -2,11 +2,14 @@
 
 from fastapi import FastAPI
 
+from atelier.api.routes.generate import router as generate_router
 from atelier.settings import SETTINGS, defaults
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Atelier AI", version="0.1.0")
+
+    app.include_router(generate_router)
 
     @app.get("/api/settings")
     def list_settings():
