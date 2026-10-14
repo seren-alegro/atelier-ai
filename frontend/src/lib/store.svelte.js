@@ -22,10 +22,15 @@ export const store = $state({
 });
 
 /** /api/settings를 불러오고, 성공하면 원격 값으로 교체.
- *  백엔드는 torch 임포트 때문에 시작이 수십 초 걸릴 수 있어서,
- *  최대 60초간 2초 간격으로 재시도한다. */
+ *  백엔드는 torch 임포트 때문에 시작이 수십 초~수 분 걸릴 수 있어서,
+ *  최대 3분간 2초 간격으로 재시도한다.
+ *  reconnect()로 새 루프가 시작되면 이전 루프는 epoch로 취소된다. */
+let epoch = 0;
+
 export async function initStore() {
-  const remote = await fetchWithRetry(30, 2000);
+  const myEpoch = ++epoch;
+  const remote = await fetchWithRetry(90, 2000, myEpoch);
+  if (myEpoch !== epoch) return; // 새 루프가 시작됨 → 이 루프는 중단
   if (remote) {
     store.meta = remote;
     store.apiOnline = true;
@@ -37,8 +42,9 @@ export async function initStore() {
   store.loaded = true;
 }
 
-async function fetchWithRetry(tries, intervalMs) {
+async function fetchWithRetry(tries, intervalMs, myEpoch) {
   for (let i = 0; i < tries; i++) {
+    if (myEpoch !== epoch) return null;
     const remote = await fetchSettingsMeta();
     if (remote) return remote;
     await new Promise((r) => setTimeout(r, intervalMs));
