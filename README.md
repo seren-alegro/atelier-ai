@@ -1,5 +1,7 @@
 # Atelier AI
 
+[English](README.en.md)
+
 그림 생성 전용 데스크톱 도구. 초보자도 바로 쓸 수 있는 직관적인 UI를 지향한다.
 
 - 완전 로컬 동작 (인터넷 없이도 실행)
@@ -163,6 +165,11 @@ git tag v0.2.0 && git push origin main v0.2.0
 | 생성 중 오류 / 화면이 멈춘다 | VRAM 부족일 수 있다. 해상도나 배치를 낮춰본다 |
 | `./install.sh`가 Tauri 의존성에서 멈춘다 | `src-tauri/README.md`의 OS별 시스템 패키지 목록 확인 |
 | `npm run dev`가 안 된다 | Node.js 18+ 확인 후 `rm -rf node_modules && npm install` |
+
+## 요구 사항
+
+NVIDIA GPU(CUDA) 또는 Apple Silicon(Metal/MPS)이 필요합니다. CPU 전용 환경은
+지원하지 않으며, 생성 요청 시 오류가 발생합니다.
 
 ## 라이선스
 
