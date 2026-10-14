@@ -38,9 +38,23 @@ def _lora_already_loaded(pipe, adapter: str) -> bool:
         return False
 
 
+def _default_device() -> str:
+    """cuda → mps(Apple Silicon Metal) → cpu 순서로 자동 판별."""
+    import torch
+    if torch.cuda.is_available():
+        return "cuda"
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def _default_dtype(device: str) -> str:
+    return "float16" if device in ("cuda", "mps") else "float32"
+
+
 class Pipeline:
     """txt2img / img2img / inpaint 파이프라인."""
-
     def __init__(
         self,
         model_path: str,
@@ -64,8 +78,8 @@ class Pipeline:
         import torch
         from diffusers import AutoPipelineForText2Image
 
-        device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
-        dtype_name = self.torch_dtype or ("float16" if device == "cuda" else "float32")
+        device = self.device or _default_device()
+        dtype_name = self.torch_dtype or _default_dtype(device)
         dtype = getattr(torch, dtype_name)
 
         pipe = AutoPipelineForText2Image.from_pretrained(
@@ -252,9 +266,8 @@ class Pipeline:
         strength = p.pop("controlnet_strength", DEFAULT_CONTROLNET_STRENGTH)
         model_ref = p.pop("controlnet_model", "")
 
-        device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
-        dtype_name = self.torch_dtype or (
-            "float16" if device == "cuda" else "float32")
+        device = self.device or _default_device()
+        dtype_name = self.torch_dtype or _default_dtype(device)
         dtype = getattr(torch, dtype_name)
         self.device = device
 
