@@ -172,3 +172,14 @@ def test_get_pipeline_ignores_missing_saved_file(client, tmp_path, monkeypatch):
         gen.get_pipeline()
     assert "503" in str(exc.value) or "모델이 설정되지 않았어요" in str(exc.value)
     gen.set_pipeline(None)
+
+
+def test_get_pipeline_output_dir_in_data_dir(client, tmp_path, monkeypatch):
+    """출력 폴더가 데이터 디렉토리 아래로 고정되는지."""
+    monkeypatch.setattr(gen, "Pipeline", FakePipeline)
+    monkeypatch.setenv("ATELIER_MODEL_PATH", str(tmp_path / "m.safetensors"))
+    (tmp_path / "m.safetensors").write_bytes(b"x")
+    gen.set_pipeline(None)
+    pipe = gen.get_pipeline()
+    assert pipe.output_dir == str(tmp_path / "data" / "outputs")
+    gen.set_pipeline(None)

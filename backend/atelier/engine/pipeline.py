@@ -26,6 +26,18 @@ DEFAULT_INPAINT_STRENGTH = 0.75
 DEFAULT_CONTROLNET_STRENGTH = 0.8
 
 
+def _lora_already_loaded(pipe, adapter: str) -> bool:
+    """UNet을 공유하는 파생 파이프(from_pipe)에는 이미 로드돼 있을 수 있다.
+    get_list_adapters가 있으면 실제 로드 여부를 확인한다."""
+    get_list = getattr(pipe, "get_list_adapters", None)
+    if not callable(get_list):
+        return False
+    try:
+        return adapter in get_list()
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class Pipeline:
     """txt2img / img2img / inpaint 파이프라인."""
 
@@ -144,11 +156,14 @@ class Pipeline:
                 adapter = cache.get(path)
                 if adapter is None:
                     adapter = f"atelier_lora_{len(cache)}"
-                    try:
-                        pipe.load_lora_weights(path, adapter_name=adapter)
-                    except Exception as e:  # noqa: BLE001 - 깨진 LoRA는 건너뜀
-                        print(f"[atelier] LoRA 로드 실패 ({name}): {e}")
-                        continue
+                    # from_pipe 파생 파이프는 UNet을 공유하므로
+                    # 이미 로드된 어댑터면 다시 로드하지 않는다.
+                    if not _lora_already_loaded(pipe, adapter):
+                        try:
+                            pipe.load_lora_weights(path, adapter_name=adapter)
+                        except Exception as e:  # noqa: BLE001 - 깨진 LoRA는 건너뜀
+                            print(f"[atelier] LoRA 로드 실패 ({name}): {e}")
+                            continue
                     cache[path] = adapter
                 active.append((adapter, strength))
 

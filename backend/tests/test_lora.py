@@ -106,3 +106,17 @@ def test_multiple_loras_weights(lora_env, tmp_path):
     assert len(dpipe.loaded) == 2
     names, weights = dpipe.adapters_set
     assert weights == [0.7, 0.3]
+
+
+def test_shared_unet_skips_reload(lora_env):
+    """from_pipe 파생 파이프(UNet 공유): 이미 로드된 어댑터는 다시 로드하지 않음."""
+
+    class SharedPipe(FakeDiffusersPipe):
+        def get_list_adapters(self):
+            return ["atelier_lora_0"]
+
+    p, dpipe = _pipe(), SharedPipe()
+    p._apply_loras(dpipe, {"lora/style.safetensors":
+                           {"enabled": True, "strength": 0.6}})
+    assert dpipe.loaded == []  # 재로드 안 함
+    assert dpipe.adapters_set == (["atelier_lora_0"], [0.6])

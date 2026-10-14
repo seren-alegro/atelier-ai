@@ -81,7 +81,9 @@ def get_pipeline() -> Pipeline:
                 detail="모델이 설정되지 않았어요. 모델 탭에서 체크포인트를 "
                        "선택하거나 ATELIER_MODEL_PATH 환경 변수를 설정하세요.",
             )
-        pipe = Pipeline(model_path=model_path, output_dir="outputs")
+        # 출력 폴더는 데이터 디렉토리로 고정 (실행 CWD에 따라 흩어지지 않게)
+        output_dir = os.path.join(history_module.data_dir(), "outputs")
+        pipe = Pipeline(model_path=model_path, output_dir=output_dir)
         _ensure_loaded(pipe)
         _pipeline = pipe
         return _pipeline
