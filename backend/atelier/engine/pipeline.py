@@ -39,14 +39,22 @@ def _lora_already_loaded(pipe, adapter: str) -> bool:
 
 
 def _default_device() -> str:
-    """cuda → mps(Apple Silicon Metal) → cpu 순서로 자동 판별."""
+    """cuda → mps(Apple Silicon Metal) 순서로 자동 판별.
+
+    GPU가 없으면 에러를 낸다. CPU 폴백은 허용하지 않는다
+    (SDXL을 CPU로 돌리면 한 장에 수십 분이 걸려 실용성이 없음).
+    device를 명시적으로 넘기면(예: 테스트용 "cpu") 그 값을 그대로 쓴다.
+    """
     import torch
     if torch.cuda.is_available():
         return "cuda"
     mps = getattr(torch.backends, "mps", None)
     if mps is not None and mps.is_available():
         return "mps"
-    return "cpu"
+    raise RuntimeError(
+        "GPU를 찾을 수 없습니다. Atelier AI는 NVIDIA GPU(CUDA) 또는 "
+        "Apple Silicon(Metal/MPS)이 필요합니다."
+    )
 
 
 def _default_dtype(device: str) -> str:

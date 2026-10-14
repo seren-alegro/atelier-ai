@@ -94,7 +94,11 @@ def _ensure_loaded(pipe) -> None:
     load = getattr(pipe, "load", None)
     if callable(load):
         with _pipeline_lock:
-            load()
+            try:
+                load()
+            except RuntimeError as e:
+                # GPU 없음 등 로드 실패는 503으로 전달 (프론트에서 메시지 표시)
+                raise HTTPException(status_code=503, detail=str(e))
 
 
 def _save_upload(data_b64: str, job_id: str, name: str) -> str:
