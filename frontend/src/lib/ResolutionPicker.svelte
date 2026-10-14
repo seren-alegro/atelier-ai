@@ -64,6 +64,15 @@
   function onCustomInput() {
     groupId = 'custom';
   }
+
+  /** 최대공약수로 약분한 화면 비율 (예: 768×1536 → "1 : 2") */
+  function aspectRatio(w, h) {
+    const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+    const g = gcd(w, h) || 1;
+    return `${w / g} : ${h / g}`;
+  }
+
+  const ratio = $derived(aspectRatio(store.values.width ?? 1024, store.values.height ?? 1024));
 </script>
 
 <div class="res-picker">
@@ -108,6 +117,7 @@
           aria-label="세로 해상도"
         />
       </label>
+      <p class="res-ratio">화면 비율 <b>{ratio}</b></p>
       <p class="res-hint">최대 2048px까지. 클수록 VRAM을 많이 써요.</p>
     </div>
   {:else}
@@ -179,6 +189,15 @@
     margin: 0;
     font-size: 11px;
     color: var(--text-dim);
+  }
+  .res-ratio {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .res-ratio b {
+    color: var(--text);
+    font-size: 13px;
   }
   .seg-name {
     display: block;
