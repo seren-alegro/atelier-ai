@@ -185,3 +185,7 @@ An NVIDIA GPU (CUDA) or Apple Silicon (Metal/MPS) is required. CPU-only machines
 ## License
 
 MIT
+
+## Credits
+
+- Korean tag labels: [Danbooru Wiki Korean Translation](https://localsmile.github.io/danbooru_KR_wiki_tag_search/) by localsmile — downloaded on first run.

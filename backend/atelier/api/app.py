@@ -6,6 +6,7 @@ from atelier.api.routes.generate import router as generate_router
 from atelier.api.routes.history import router as history_router
 from atelier.api.routes.models import router as models_router
 from atelier.api.routes.pose import router as pose_router
+from atelier.api.routes.tags import router as tags_router
 from atelier.api.routes.train import router as train_router
 from atelier.settings import SETTINGS, defaults
 
@@ -17,6 +18,7 @@ def create_app() -> FastAPI:
     app.include_router(history_router)
     app.include_router(models_router)
     app.include_router(pose_router)
+    app.include_router(tags_router)
     app.include_router(train_router)
 
     @app.get("/api/settings")

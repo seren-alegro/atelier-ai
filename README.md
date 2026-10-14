@@ -186,3 +186,7 @@ NVIDIA GPU(CUDA) 또는 Apple Silicon(Metal/MPS)이 필요합니다. CPU 전용 
 ## 라이선스
 
 MIT
+
+## 감사의 말
+
+- 태그 한국어 라벨: [단부루 위키 한국어 번역](https://localsmile.github.io/danbooru_KR_wiki_tag_search/) (localsmile님) — 첫 실행 시 내려받아 사용합니다.

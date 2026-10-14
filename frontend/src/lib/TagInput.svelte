@@ -2,12 +2,22 @@
   // Danbooru식 태그 입력: 쉼표/Enter로 칩 생성, 칩의 ×로 삭제.
   // value는 쉼표 구분 문자열로 바인딩된다.
   // 자동완성: 입력 중 후보 드롭다운 (↑↓ 이동, Enter/Tab 확정, Esc 닫기).
+  // 한국어 라벨: 백엔드 /api/tag-labels에서 받아 칩 툴팁·자동완성에 표시.
+  import { onMount } from 'svelte';
   import { suggestTags } from './tagSuggestions.js';
+  import { ensureTagLabels, labelOf } from './tagLabels.js';
 
   let { value = $bindable(''), placeholder = '태그를 입력하고 쉼표를 누르세요' } = $props();
   let draft = $state('');
   let open = $state(false);
   let activeIdx = $state(0);
+  let labelsReady = $state(false);
+
+  onMount(async () => {
+    // 라벨은 백그라운드로 — 없어도 입력은 정상 동작
+    await ensureTagLabels();
+    labelsReady = true;
+  });
 
   function tagList() {
     return String(value ?? '')
@@ -79,7 +89,7 @@
 <div class="tag-input">
   <div class="chips">
     {#each tagList() as tag, i (tag + i)}
-      <span class="chip">
+      <span class="chip" title={labelOf(tag) ?? tag}>
         <span class="chip-tag">{tag}</span>
         <button class="chip-x" onclick={() => removeAt(i)} aria-label="태그 삭제">×</button>
       </span>
@@ -106,13 +116,17 @@
   {#if open && suggestions.length > 0}
     <ul class="suggest" role="listbox">
       {#each suggestions as s, i (s)}
+        {@const label = labelOf(s)}
         <li
           role="option"
           aria-selected={i === activeIdx}
           class:active={i === activeIdx}
           onmousedown={(e) => { e.preventDefault(); addTag(s); }}
           onmouseenter={() => (activeIdx = i)}
-        >{s}</li>
+        >
+          <span class="suggest-tag">{s}</span>
+          {#if label}<span class="suggest-label">{label}</span>{/if}
+        </li>
       {/each}
     </ul>
   {/if}
@@ -151,9 +165,22 @@
     cursor: pointer;
     font-size: 13.5px;
     color: #cfd2ea;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .suggest li.active, .suggest li:hover {
     background: rgba(124, 92, 255, 0.22);
     color: #fff;
   }
+  .suggest-tag { font-weight: 600; }
+  .suggest-label {
+    font-size: 11.5px;
+    color: #9aa0c7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .suggest li.active .suggest-label { color: #c9bfff; }
 </style>
