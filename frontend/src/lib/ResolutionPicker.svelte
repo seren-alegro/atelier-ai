@@ -65,14 +65,17 @@
     groupId = 'custom';
   }
 
-  /** 최대공약수로 약분한 화면 비율 (예: 768×1536 → "1 : 2") */
+  /** 최대공약수로 약분한 화면 비율 (예: 768×1536 → "1:2") */
   function aspectRatio(w, h) {
     const gcd = (a, b) => (b ? gcd(b, a % b) : a);
     const g = gcd(w, h) || 1;
-    return `${w / g} : ${h / g}`;
+    return `${w / g}:${h / g}`;
   }
 
-  const ratio = $derived(aspectRatio(store.values.width ?? 1024, store.values.height ?? 1024));
+  const ratio = $derived(
+    aspectRatio(store.values.width ?? 1024, store.values.height ?? 1024)
+      .replace(':', ' : ')
+  );
 </script>
 
 <div class="res-picker">
@@ -131,6 +134,7 @@
         >
           {#if p.name}<span class="seg-name">{p.name}</span>{/if}
           <span>{p.w}×{p.h}</span>
+          <span class="seg-ratio">{aspectRatio(p.w, p.h)}</span>
         </button>
       {/each}
     </div>
@@ -204,5 +208,11 @@
     font-size: 10px;
     opacity: 0.75;
     margin-bottom: 2px;
+  }
+  .seg-ratio {
+    display: block;
+    font-size: 10px;
+    opacity: 0.6;
+    margin-top: 1px;
   }
 </style>
