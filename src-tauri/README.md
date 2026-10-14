@@ -38,6 +38,33 @@ cargo build        # 디버그 빌드
 
 `tauri build`로 설치 패키지를 만들 때는 Tauri CLI가 필요하다.
 
+### 디버그 빌드에서는 dev 서버가 필요하다
+
+`cargo build`(디버그)는 개발 모드라서, Tauri가 `tauri.conf.json`의
+`devUrl`(http://localhost:5173)로 프론트엔드를 불러온다.
+그래서 앱을 실행하기 전에 프론트 dev 서버를 먼저 띄워야 한다.
+(안 띄우면 "Could not connect to localhost"가 뜬다.)
+
+```sh
+# 터미널 1: 프론트 dev 서버
+cd frontend && npm run dev
+# 터미널 2: 백엔드 (앱이 자동 실행을 시도하지만, 직접 띄우는 게 확실하다)
+cd backend && uv run uvicorn atelier.api.app:app --host 127.0.0.1 --port 8079
+# 터미널 3: 앱
+cd src-tauri && ./target/debug/atelier-ai
+```
+
+### 독립 실행 바이너리가 필요하면
+
+`--release`로 빌드하면 프론트엔드(`frontend/dist`)가 바이너리에 내장된다.
+배포용은 이쪽이다.
+
+```sh
+cd frontend && npm run build
+cd ../src-tauri && cargo build --release
+./target/release/atelier-ai
+```
+
 ### 필요한 시스템 패키지 (OS별 설치 명령어)
 
 Tauri 2 앱을 빌드하려면 OS마다 준비물이 조금씩 다르다.
