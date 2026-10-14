@@ -8,3 +8,11 @@ outputs/
 
 # Rust / Tauri
 src-tauri/target/
+
+# 업데이터 서명 키 (절대 커밋 금지)
+*.key
+*.key.pub
+
+# frozen 백엔드 산출물 (CI에서 빌드 시 생성)
+src-tauri/backend-dist/
+!src-tauri/backend-dist/.gitkeep

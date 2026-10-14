@@ -107,8 +107,41 @@ npm run dev
 
 ```bash
 cd backend && uv run pytest tests/ -q
-cd frontend && npm run build
+cd frontend && npm test && npm run build
 ```
+
+## 릴리즈 (자동 업데이트)
+
+태그를 푸시하면 GitHub Actions가 Linux/Windows/macOS용 설치 파일을 빌드하고
+릴리즈를 발행합니다. 앱은 시작 시 새 버전을 확인하고, 설정 탭에서
+다운로드·설치·재시작할 수 있습니다. (Tauri 업데이터 + 서명)
+
+### 처음 한 번만: 서명 키 등록
+
+업데이터 서명용 비밀키는 저장소에 올리지 않습니다.
+키 파일(`updater.key`)을 받은 뒤 GitHub 저장소의
+Settings → Secrets and variables → Actions에 등록하세요.
+
+| Secret | 값 |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | `updater.key` 파일 전체 내용 |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 빈 값 (키에 비밀번호 없음) |
+
+```sh
+cat updater.key | base64 -w0 | gh secret set TAURI_SIGNING_PRIVATE_KEY
+printf '' | gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+### 릴리즈 하기
+
+```sh
+./scripts/bump-version.sh 0.2.0   # 세 곳의 버전을 한 번에 올림
+git add -A && git commit -m "v0.2.0"
+git tag v0.2.0 && git push origin main v0.2.0
+```
+
+워크플로우가 백엔드 동결(PyInstaller) → Tauri 빌드·서명 → draft 릴리즈 생성 →
+`latest.json` 검증 → 공개 순서로 진행합니다. 공개 후에 앱들이 업데이트를 감지합니다.
 
 ### 환경 변수
 

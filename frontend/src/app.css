@@ -385,6 +385,18 @@ button { font-family: inherit; }
 .api-badge.online { background: rgba(158, 206, 106, 0.12); color: var(--ok); border-color: rgba(158, 206, 106, 0.35); }
 .api-badge.offline { background: rgba(224, 175, 104, 0.1); color: var(--warn); border-color: rgba(224, 175, 104, 0.3); }
 
+.update-badge {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent, #7c6cf0);
+  background: rgba(124, 108, 240, 0.12);
+  color: var(--accent, #7c6cf0);
+  cursor: pointer;
+  margin-left: 8px;
+}
+.update-badge:hover { filter: brightness(1.1); }
+
 /* 탭 */
 .tabs {
   display: flex;

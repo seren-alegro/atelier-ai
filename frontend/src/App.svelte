@@ -11,6 +11,7 @@
   import PoseTab from './lib/PoseTab.svelte';
   import ModelsTab from './lib/ModelsTab.svelte';
   import SettingsPanel from './lib/SettingsPanel.svelte';
+  import { updateState, checkForUpdates, loadCurrentVersion } from './lib/updater.svelte.js';
 
   // 왼쪽 내비: create(작업공간) | library | templates | history
   let nav = $state('create');
@@ -59,6 +60,9 @@
 
   onMount(() => {
     initStore();
+    // 시작 시 새 버전이 있는지 조용히 확인 (있을 때만 설정 탭에 표시)
+    loadCurrentVersion();
+    checkForUpdates({ silent: true });
     // 백엔드가 나중에 죽으면 배지에 반영 (30초 간격)
     const timer = setInterval(() => { checkBackendAlive(); }, 30000);
     return () => clearInterval(timer);
@@ -90,6 +94,15 @@
           백엔드 없음 · 기본값 사용 중 (클릭해서 재시도)
         {/if}
       </button>
+      {#if updateState.status === 'available'}
+        <button
+          class="update-badge"
+          onclick={() => onNav('settings')}
+          title="새 버전이 있어요. 클릭해서 업데이트"
+        >
+          새 버전 {updateState.availableVersion} 있음
+        </button>
+      {/if}
     </header>
 
     {#if nav === 'create'}

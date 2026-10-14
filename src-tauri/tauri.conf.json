@@ -1,1 +1,35 @@
-{"$schema":"https://schema.tauri.app/config/2","app":{"windows":[{"height":800,"title":"Atelier AI","width":1280}]},"build":{"devUrl":"http://localhost:5173","frontendDist":"../frontend/dist"},"identifier":"ai.atelier.app","productName":"Atelier AI","version":"0.1.0"}
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "height": 800,
+        "title": "Atelier AI",
+        "width": 1280
+      }
+    ]
+  },
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../frontend/dist"
+  },
+  "identifier": "ai.atelier.app",
+  "productName": "Atelier AI",
+  "version": "0.1.0",
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "endpoints": [
+        "https://github.com/seren-alegro/atelier-ai/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY3MTMzNzg2QUMzQzQ4QkUKUldTK1NEeXNoamNUWno3d1o5ZUNYL1FVQ25CTFJwckY4TTRuZHJaM2RWUVJVRUlQNjhTRU53M2cK"
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "resources": [
+      "backend-dist"
+    ]
+  }
+}

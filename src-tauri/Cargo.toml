@@ -8,6 +8,8 @@ edition = "2021"
 # 이게 없으면 release 빌드에서도 localhost:5173(devUrl)을 찾으러 가서
 # "Could not connect to localhost"가 뜬다.
 tauri = { version = "2", features = ["custom-protocol"] }
+# 롤링 릴리즈: GitHub Releases 기반 자동 업데이트
+tauri-plugin-updater = "2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

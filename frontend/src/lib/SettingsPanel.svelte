@@ -2,6 +2,7 @@
   import { store, resetAll } from './store.svelte.js';
   import SettingField from './SettingField.svelte';
   import TagInput from './TagInput.svelte';
+  import UpdatePanel from './UpdatePanel.svelte';
 
   // 프롬프트 계열은 칩 입력 UI 사용
   const TEXT_AS_TAGS = new Set(['prompt', 'negative_prompt']);
@@ -31,4 +32,6 @@
       {/if}
     {/each}
   {/if}
+
+  <UpdatePanel />
 </div>

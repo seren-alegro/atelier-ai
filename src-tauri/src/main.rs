@@ -8,9 +8,11 @@
 //! 백엔드 탐색 순서:
 //! 1. `ATELIER_BACKEND_CMD` 환경 변수 — 전체 명령을 직접 지정
 //!    (예: `ATELIER_BACKEND_CMD="/opt/atelier/run-backend.sh"`)
-//! 2. 실행 파일 옆의 `atelier-backend` 사이드카 바이너리
-//!    (향후 PyInstaller 등으로 얼린 배포용 바이너리 자리)
-//! 3. 개발 레이아웃 — 실행 파일 기준 `../../../backend` 디렉토리가 있으면
+//! 2. 번들에 포함된 frozen 백엔드 (`resources/backend-dist/atelier-backend`)
+//!    — 릴리즈 빌드에서 PyInstaller로 얼린 백엔드.
+//! 3. 실행 파일 옆의 `atelier-backend` 사이드카 바이너리
+//!    (수동 배치용 자리)
+//! 4. 개발 레이아웃 — 실행 파일 기준 `../../../backend` 디렉토리가 있으면
 //!    `backend/.venv`의 Python을 우선 사용하고, 없으면 OS에 맞는 Python으로
 //!    `uvicorn atelier.api.app:app` 실행.
 //!    (Windows: `py -3` → `python` → `python3`, Unix: `python3` → `python` 순으로 탐색.)
@@ -18,7 +20,7 @@
 //! 어떤 방법으로도 백엔드를 띄우지 못하면 앱은 그대로 실행되고,
 //! 프론트엔드는 내장 기본값(폴백) 모드로 동작한다.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use tauri::Manager;
@@ -86,7 +88,7 @@ fn backend_alive() -> bool {
     std::net::TcpStream::connect(format!("{}:{}", BACKEND_HOST, BACKEND_PORT)).is_ok()
 }
 
-fn find_backend() -> Option<SpawnSpec> {
+fn find_backend(resource_dir: Option<&Path>) -> Option<SpawnSpec> {
     // 1. 환경 변수로 직접 지정
     if let Ok(cmd) = std::env::var("ATELIER_BACKEND_CMD") {
         let mut parts = split_cmd(&cmd).into_iter();
@@ -99,11 +101,27 @@ fn find_backend() -> Option<SpawnSpec> {
         }
     }
 
+    // 2. 번들에 포함된 frozen 백엔드 (릴리즈 빌드)
+    if let Some(res) = resource_dir {
+        #[cfg(target_os = "windows")]
+        let frozen = res.join("backend-dist").join("atelier-backend").join("atelier-backend.exe");
+        #[cfg(not(target_os = "windows"))]
+        let frozen = res.join("backend-dist").join("atelier-backend").join("atelier-backend");
+        if frozen.is_file() {
+            return Some(SpawnSpec {
+                program: frozen.to_string_lossy().into_owned(),
+                args: Vec::new(),
+                // frozen 백엔드는 데이터 디렉토리를 스스로 찾으므로 cwd 불필요
+                cwd: None,
+            });
+        }
+    }
+
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(PathBuf::from))?;
 
-    // 2. 사이드카 바이너리 (배포용).
+    // 3. 실행 파일 옆의 사이드카 바이너리 (수동 배치용).
     //    얼린 백엔드는 인자 없이 실행하면 127.0.0.1:8079 에서 서빙한다고 가정한다.
     #[cfg(target_os = "windows")]
     let sidecar_name = "atelier-backend.exe";
@@ -118,7 +136,7 @@ fn find_backend() -> Option<SpawnSpec> {
         });
     }
 
-    // 3. 개발 레이아웃: <exe>/../../../backend (src-tauri/target/{debug,release}/ 기준)
+    // 4. 개발 레이아웃: <exe>/../../../backend (src-tauri/target/{debug,release}/ 기준)
     //    backend/.venv 의 Python을 우선 사용하고, 없으면 OS에 맞는 Python 탐색
     let dev_backend = exe_dir.join("../../../backend");
     if dev_backend.join("pyproject.toml").is_file() {
@@ -160,8 +178,8 @@ fn find_backend() -> Option<SpawnSpec> {
     None
 }
 
-fn spawn_backend() -> Option<Child> {
-    let spec = find_backend()?;
+fn spawn_backend(resource_dir: Option<&Path>) -> Option<Child> {
+    let spec = find_backend(resource_dir)?;
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args).env("PYTHONUNBUFFERED", "1");
     // Windows: 백엔드 실행 시 콘솔 창이 팝업되지 않게
@@ -192,16 +210,32 @@ fn spawn_backend() -> Option<Child> {
     }
 }
 
+/// 프론트엔드에서 호출: 업데이트 설치 전 백엔드를 먼저 종료한다.
+/// (Windows에서 실행 중인 백엔드 파일이 잠겨 업데이트 설치가 실패하는 것을 방지)
+#[tauri::command]
+fn stop_backend(state: tauri::State<BackendProcess>) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = guard.take() {
+        eprintln!("[atelier] 업데이트 전 백엔드 종료 중...");
+        child.kill().map_err(|e| e.to_string())?;
+        let _ = child.wait();
+    }
+    Ok(())
+}
+
 fn main() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // 번들 리소스 디렉토리 (frozen 백엔드 탐색용)
+            let resource_dir = app.path().resource_dir().ok();
             // 이미 떠 있는 백엔드가 있으면 새로 띄우지 않고 재사용한다.
             // (포트 선점 시 uvicorn이 조용히 죽는 문제를 방지)
             let child = if backend_alive() {
                 eprintln!("[atelier] 이미 실행 중인 백엔드를 사용합니다.");
                 None
             } else {
-                spawn_backend()
+                spawn_backend(resource_dir.as_deref())
             };
             if child.is_none() && !backend_alive() {
                 eprintln!("[atelier] 백엔드 없이 실행합니다.");
@@ -209,6 +243,7 @@ fn main() {
             app.manage(BackendProcess(Mutex::new(child)));
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![stop_backend])
         .build(tauri::generate_context!())
         .expect("Tauri 앱 실행 실패");
 
