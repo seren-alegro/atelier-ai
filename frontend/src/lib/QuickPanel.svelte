@@ -15,7 +15,13 @@
     euler_ancestral: 'Euler Ancestral',
     dpmpp_2m_karras: 'DPM++ 2M Karras',
     ddim: 'DDIM',
+    restart: 'Restart (실험실)',
+    sa_solver: 'SA-Solver (실험실)',
+    deis: 'DEIS (실험실)',
+    lcm: 'LCM (실험실)',
+    tcd: 'TCD (실험실)',
   };
+  const LAB_SAMPLERS = new Set(['restart', 'sa_solver', 'deis', 'lcm', 'tcd']);
 
   const samplerMeta = $derived(store.meta.find((s) => s.key === 'sampler'));
   const samplerOptions = $derived(samplerMeta?.options ?? []);
@@ -51,9 +57,16 @@
 <div class="qp-section">
   <div class="qp-title">🎲 샘플링 방법</div>
   <select class="select" bind:value={store.values.sampler} aria-label="샘플링 방법">
-    {#each samplerOptions as opt (opt)}
-      <option value={opt}>{samplerName(opt)}</option>
-    {/each}
+    <optgroup label="일반">
+      {#each samplerOptions.filter((o) => !LAB_SAMPLERS.has(o)) as opt (opt)}
+        <option value={opt}>{samplerName(opt)}</option>
+      {/each}
+    </optgroup>
+    <optgroup label="실험실">
+      {#each samplerOptions.filter((o) => LAB_SAMPLERS.has(o)) as opt (opt)}
+        <option value={opt}>{samplerName(opt)}</option>
+      {/each}
+    </optgroup>
   </select>
 </div>
 

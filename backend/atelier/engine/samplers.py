@@ -1,6 +1,6 @@
 """샘플러 이름 → diffusers 스케줄러 매핑.
 
-settings.py의 `sampler` / `experimental_sampler` 설정값을
+settings.py의 `sampler` 설정값(일반 6종 + 실험실 5종)을
 diffusers 스케줄러로 변환한다.
 
 원칙:
@@ -63,7 +63,7 @@ SAMPLER_MAP: dict[str, SamplerSpec] = {
         scheduler="DDIMScheduler",
         note="정확 대응.",
     ),
-    # --- 실험실 샘플러 (settings.py `experimental_sampler`) ---
+    # --- 실험실 샘플러 (settings.py `sampler`의 실험실 5종) ---
     "restart": SamplerSpec(
         scheduler="HeunDiscreteScheduler",
         approximate=True,

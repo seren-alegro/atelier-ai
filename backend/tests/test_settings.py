@@ -22,14 +22,9 @@ def test_recommended_within_bounds():
 def test_sampler_options_expected():
     s = get_setting("sampler")
     assert s.options == ["er_sde", "dpmpp_2m_sde_gpu", "dpmpp_2m_sde",
-                        "euler_ancestral", "dpmpp_2m_karras", "ddim"]
+                         "euler_ancestral", "dpmpp_2m_karras", "ddim",
+                         "restart", "sa_solver", "deis", "lcm", "tcd"]
     assert s.recommended == "er_sde"
-
-
-def test_experimental_sampler_options_expected():
-    s = get_setting("experimental_sampler")
-    assert s.options == ["restart", "sa_solver", "deis", "lcm", "tcd"]
-    assert s.recommended == "restart"
 
 
 def test_steps_bounds():
@@ -55,7 +50,6 @@ def test_validate_out_of_range():
 
 def test_validate_bad_choice():
     assert "sampler" in validate({"sampler": "nope"})
-    assert "experimental_sampler" in validate({"experimental_sampler": "nope"})
 
 
 def test_validate_unknown_key():

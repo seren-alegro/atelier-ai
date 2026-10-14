@@ -36,11 +36,11 @@ export const FALLBACK_SETTINGS = [
   {
     key: 'sampler',
     label: '샘플러',
-    description: '그림을 그려나가는 방식이에요. Anima는 SDE 계열이 잘 맞아요. er_sde가 기본 추천이에요.',
+    description: '그림을 그려나가는 방식이에요. Anima는 SDE 계열이 잘 맞아요. er_sde가 기본 추천이에요. 실험실 항목은 궁합을 직접 돌려보셔야 해요 (restart는 느리지만 깔끔하게, lcm/tcd는 몇 스텝 만에 뽑아요).',
     recommended: 'er_sde',
     kind: 'choice',
     min: null, max: null,
-    options: ['er_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde', 'euler_ancestral', 'dpmpp_2m_karras', 'ddim'],
+    options: ['er_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde', 'euler_ancestral', 'dpmpp_2m_karras', 'ddim', 'restart', 'sa_solver', 'deis', 'lcm', 'tcd'],
     unit: '',
   },
   {
@@ -82,15 +82,5 @@ export const FALLBACK_SETTINGS = [
     recommended: 1,
     kind: 'number',
     min: 1, max: 8, options: [], unit: '장',
-  },
-  {
-    key: 'experimental_sampler',
-    label: '실험실 샘플러',
-    description: '실험적인 샘플러 모음이에요. Anima와의 궁합은 직접 돌려보셔야 해요. restart는 느리지만 깔끔하게, lcm/tcd는 몇 스텝 만에 뽑아요.',
-    recommended: 'restart',
-    kind: 'choice',
-    min: null, max: null,
-    options: ['restart', 'sa_solver', 'deis', 'lcm', 'tcd'],
-    unit: '',
   },
 ];

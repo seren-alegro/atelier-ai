@@ -10,10 +10,7 @@ from atelier.settings import get_setting
 
 
 def _all_configured_samplers():
-    names = []
-    for key in ("sampler", "experimental_sampler"):
-        names.extend(get_setting(key).options)
-    return names
+    return list(get_setting("sampler").options)
 
 
 def test_every_configured_sampler_is_mapped():
