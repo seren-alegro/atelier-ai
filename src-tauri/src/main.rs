@@ -21,6 +21,7 @@
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use tauri::Manager;
 
 const BACKEND_HOST: &str = "127.0.0.1";
 const BACKEND_PORT: &str = "8079";
