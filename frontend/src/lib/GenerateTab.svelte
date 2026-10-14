@@ -128,9 +128,21 @@
     color: #9aa0c7;
     font-size: 13px;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
   }
   .neg summary::-webkit-details-marker { display: none; }
   .neg summary::before { content: '⊘ '; }
+  .neg summary::after {
+    content: '▾';
+    margin-left: auto;
+    color: #6b7090;
+    transition: transform 0.18s;
+  }
+  .neg[open] summary::after { transform: rotate(180deg); }
+  .neg summary:hover { color: #cfd2ea; }
   .neg-body { margin-top: 8px; }
   .btn-row { margin-top: 12px; }
   .cta {
