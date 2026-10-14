@@ -42,6 +42,7 @@ def client(tmp_path, monkeypatch):
     (models_dir / "controlnet" / "openpose.safetensors").write_bytes(b"w" * 256)
     (models_dir / "readme.txt").write_text("무시됨")
     monkeypatch.setenv("ATELIER_MODELS_DIR", str(models_dir))
+    monkeypatch.setenv("ATELIER_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setattr(models, "Pipeline", FakePipeline)
     monkeypatch.setattr(models, "_active_name", None)
     gen.set_pipeline(None)
@@ -134,3 +135,40 @@ def test_refresh(client):
     r = client.post("/api/models/refresh")
     assert r.status_code == 200
     assert "models" in r.json()
+
+
+def test_active_model_persisted_to_disk(client, tmp_path):
+    client.post("/api/models/active", json={"name": "anima.safetensors"})
+    import json
+    saved = json.loads(
+        (tmp_path / "data" / "active_model.json").read_text(encoding="utf-8"))
+    assert saved["name"] == "anima.safetensors"
+
+
+def test_get_pipeline_uses_saved_active(client, tmp_path, monkeypatch):
+    """재시작 시나리오: 파이프라인 없이 저장된 활성 모델로 get_pipeline이 로드."""
+    import json
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "active_model.json").write_text(
+        json.dumps({"name": "other.ckpt"}), encoding="utf-8")
+    monkeypatch.delenv("ATELIER_MODEL_PATH", raising=False)
+    monkeypatch.setattr(gen, "Pipeline", FakePipeline)
+    gen.set_pipeline(None)
+    pipe = gen.get_pipeline()
+    assert isinstance(pipe, FakePipeline)
+    assert pipe.model_path.endswith("other.ckpt")
+    gen.set_pipeline(None)
+
+
+def test_get_pipeline_ignores_missing_saved_file(client, tmp_path, monkeypatch):
+    """저장된 모델 파일이 사라졌으면 503."""
+    import json
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "active_model.json").write_text(
+        json.dumps({"name": "지워짐.safetensors"}), encoding="utf-8")
+    monkeypatch.delenv("ATELIER_MODEL_PATH", raising=False)
+    gen.set_pipeline(None)
+    with pytest.raises(Exception) as exc:
+        gen.get_pipeline()
+    assert "503" in str(exc.value) or "모델이 설정되지 않았어요" in str(exc.value)
+    gen.set_pipeline(None)

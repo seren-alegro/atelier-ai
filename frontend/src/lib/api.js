@@ -32,7 +32,7 @@ export function requestGenerate(params, mode = 'txt2img', image = null, mask = n
   let cancelled = false;
   const promise = (async () => {
     // loras는 settings 검증 대상이 아니므로 params에서 분리해 별도 필드로 전달.
-    // 파이프라인의 LoRA 적용 지원 전까지 백엔드는 무시한다.
+    // 백엔드는 요청의 loras를 파이프라인에 실제로 적용한다.
     const { loras, ...rest } = params;
     const body = { mode, params: rest, image, mask };
     if (loras) body.loras = loras;

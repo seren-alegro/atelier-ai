@@ -6,11 +6,12 @@
 - DELETE /api/models/{name}: 모델 파일 삭제
 
 모델 디렉토리: ATELIER_MODELS_DIR 환경 변수 우선, 없으면 ~/.atelier-ai/models.
-활성 모델 기록은 인메모리 (서버 재시작 시 사라짐, MVP).
+활성 모델 선택은 active_model.json에 저장되어 서버 재시작 후에도 유지된다.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
 
@@ -31,6 +32,41 @@ _active_name: str | None = None
 def get_active_name() -> str | None:
     """현재 활성 체크포인트 이름. 작업내역 기록용."""
     return _active_name
+
+
+def _active_file() -> str:
+    """활성 모델 저장 파일. 작업내역과 같은 데이터 디렉토리 사용."""
+    from atelier.api.routes import history as history_module
+    return os.path.join(history_module.data_dir(), "active_model.json")
+
+
+def _load_saved_active() -> str | None:
+    try:
+        with open(_active_file(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    name = data.get("name") if isinstance(data, dict) else None
+    return name if isinstance(name, str) and name else None
+
+
+def _save_active(name: str | None) -> None:
+    try:
+        with open(_active_file(), "w", encoding="utf-8") as f:
+            json.dump({"name": name}, f)
+    except OSError:
+        pass  # 저장 실패해도 동작은 계속
+
+
+def get_saved_active_path() -> str | None:
+    """저장된 활성 모델의 절대 경로. 파일이 없으면 None."""
+    name = _load_saved_active()
+    if not name:
+        return None
+    try:
+        return _resolve(name)
+    except HTTPException:
+        return None
 
 
 def models_dir() -> str:
@@ -98,6 +134,17 @@ def _resolve(name: str) -> str:
     return full
 
 
+# 모듈 로드 시 저장된 활성 모델 복원 (파일이 실제로 있을 때만)
+_saved_active = _load_saved_active()
+if _saved_active:
+    try:
+        _resolve(_saved_active)
+        _active_name = _saved_active
+    except HTTPException:
+        pass
+del _saved_active
+
+
 @router.get("/api/models")
 def list_models():
     """모델 목록 + 활성 체크포인트 + 모델 디렉토리 경로."""
@@ -156,6 +203,7 @@ def set_active(req: ActiveRequest):
 
     global _active_name
     _active_name = req.name
+    _save_active(req.name)
     return {"active": _active_name}
 
 

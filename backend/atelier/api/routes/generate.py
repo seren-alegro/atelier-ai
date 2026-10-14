@@ -72,10 +72,14 @@ def get_pipeline() -> Pipeline:
             return _pipeline
         model_path = os.environ.get("ATELIER_MODEL_PATH")
         if not model_path:
+            # 저장된 활성 모델이 있으면 우선 사용 (재시작 후에도 유지)
+            from atelier.api.routes import models as models_module
+            model_path = models_module.get_saved_active_path()
+        if not model_path:
             raise HTTPException(
                 status_code=503,
-                detail="모델이 설정되지 않았어요. "
-                       "ATELIER_MODEL_PATH 환경 변수에 체크포인트 경로를 설정하세요.",
+                detail="모델이 설정되지 않았어요. 모델 탭에서 체크포인트를 "
+                       "선택하거나 ATELIER_MODEL_PATH 환경 변수를 설정하세요.",
             )
         pipe = Pipeline(model_path=model_path, output_dir="outputs")
         _ensure_loaded(pipe)

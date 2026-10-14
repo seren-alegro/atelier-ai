@@ -62,6 +62,11 @@ fi
 cd ..
 "$PYBIN" -c "import fastapi, uvicorn; print('백엔드 OK')" 2>/dev/null \
   || warn "백엔드 의존성 확인에 실패했어요. backend/에서 'uv sync'를 다시 해보세요."
+if (lspci 2>/dev/null | grep -qi nvidia || ls /dev/nvidia* >/dev/null 2>&1) \
+  && "$PYBIN" -c "import torch; assert not torch.cuda.is_available()" 2>/dev/null; then
+  warn "NVIDIA GPU가 있는데 CPU용 PyTorch가 설치됐어요. CUDA 버전을 별도로 설치하세요:"
+  warn "  cd backend && uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu128"
+fi
 
 # ---------- 4. 프론트엔드 ----------
 info "프론트엔드 빌드 중..."

@@ -39,6 +39,16 @@ try {
     .\.venv\Scripts\pip install -e .
   }
 } finally { Pop-Location }
+# NVIDIA GPU가 있는데 CPU용 torch면 CUDA 버전 안내
+$hasNvidia = (Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match 'NVIDIA' }) -ne $null
+if ($hasNvidia) {
+  $cudaOk = & backend\.venv\Scripts\python -c "import torch; print(torch.cuda.is_available())" 2>$null
+  if ($cudaOk -ne 'True') {
+    Write-Host "주의: NVIDIA GPU가 있는데 CPU용 PyTorch가 설치됐어요. CUDA 버전 설치:" -ForegroundColor Yellow
+    Write-Host "  cd backend; uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu128"
+  }
+}
 
 # ---------- 3. 프론트엔드 ----------
 Info "프론트엔드 빌드 중..."
