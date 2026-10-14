@@ -1,10 +1,10 @@
 <script>
-  // 포즈 탭: 포즈맵(OpenPose 스켈레톤 PNG) 업로드 → ControlNet으로 포즈 지정 생성
-  // v1은 포즈 자동 추출 없이 사용자가 포즈맵을 직접 올리는 방식.
+  // 포즈 탭: 포즈맵(OpenPose 스켈레톤 PNG) 업로드 또는 사진에서 자동 추출
+  // → ControlNet으로 포즈 지정 생성
   import { onMount } from 'svelte';
   import { store } from './store.svelte.js';
   import TagInput from './TagInput.svelte';
-  import { requestGenerate } from './api.js';
+  import { requestGenerate, requestPoseDetect } from './api.js';
   import { modelStore, loadModels, controlnets } from './models.svelte.js';
 
   // backend/atelier/engine/controlnet.py의 DEFAULT_CONTROLNET과 동일하게 유지
@@ -15,10 +15,12 @@
   const modelMeta = () => store.meta.find((m) => m.key === 'controlnet_model');
 
   let fileInput = $state(null);
+  let photoInput = $state(null);
   let posemapDataUrl = $state('');
   let customModel = $state(false);
   let customRef = $state('');
   let busy = $state(false);
+  let detecting = $state(false);
   let notice = $state('');
   let results = $state([]);
 
@@ -45,6 +47,33 @@
     return customModel ? customRef.trim() : (store.values.controlnet_model ?? '');
   }
 
+  function pickPhoto() {
+    photoInput.click();
+  }
+
+  async function onPhoto(e) {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    notice = '';
+    detecting = true;
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const rd = new FileReader();
+        rd.onload = () => resolve(rd.result);
+        rd.onerror = reject;
+        rd.readAsDataURL(f);
+      });
+      const b64 = String(dataUrl).split(',')[1];
+      const skeleton = await requestPoseDetect(b64);
+      posemapDataUrl = 'data:image/png;base64,' + skeleton;
+    } catch (err) {
+      notice = err.message || '포즈 추출 중 오류가 발생했어요.';
+    } finally {
+      detecting = false;
+    }
+  }
+
   async function onPose() {
     notice = '';
     busy = true;
@@ -68,7 +97,12 @@
   <div class="field">
     <div class="field-head">
       <span class="field-label">포즈맵</span>
-      <button class="btn" onclick={pickFile}>포즈맵 불러오기</button>
+      <div class="field-actions">
+        <button class="btn" onclick={pickFile} disabled={detecting}>포즈맵 불러오기</button>
+        <button class="btn" onclick={pickPhoto} disabled={detecting}>
+          {detecting ? '추출 중…' : '📷 사진에서 포즈 추출'}
+        </button>
+      </div>
     </div>
     <input
       type="file"
@@ -77,8 +111,18 @@
       onchange={onFile}
       style="display:none"
     />
-    {#if !posemapDataUrl}
-      <div class="canvas-placeholder">포즈맵 PNG를 불러오세요</div>
+    <input
+      type="file"
+      accept="image/*"
+      bind:this={photoInput}
+      onchange={onPhoto}
+      style="display:none"
+    />
+    <p class="field-desc">사진을 올리면 AI가 인물의 포즈를 스켈레톤으로 뽑아줘요. 첫 실행 시 포즈 모델(약 350MB)을 내려받아 시간이 걸릴 수 있어요.</p>
+    {#if detecting}
+      <div class="canvas-placeholder">포즈를 추출하고 있어요… (첫 실행은 모델 다운로드 중일 수 있어요)</div>
+    {:else if !posemapDataUrl}
+      <div class="canvas-placeholder">포즈맵 PNG를 불러오거나 사진에서 추출하세요</div>
     {:else}
       <div class="posemap-preview">
         <img src={posemapDataUrl} alt="포즈맵 미리보기" />
@@ -151,7 +195,7 @@
   <button
     class="btn primary"
     onclick={onPose}
-    disabled={busy || !posemapDataUrl || !store.loaded}
+    disabled={busy || detecting || !posemapDataUrl || !store.loaded}
   >
     {busy ? '그리는 중…' : '포즈로 생성하기'}
   </button>
@@ -192,5 +236,10 @@
   .btn.tool {
     padding: 7px 14px;
     font-size: 13px;
+  }
+  .field-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 </style>

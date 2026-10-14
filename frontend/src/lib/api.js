@@ -148,3 +148,20 @@ export async function refreshModels() {
     return null;
   }
 }
+
+/** POST /api/pose-detect — 사진에서 OpenPose 스켈레톤 추출.
+ *  첫 호출 시 모델 다운로드로 수십 초~수 분 걸릴 수 있어 타임아웃을 두지 않는다.
+ *  성공 시 base64 PNG 문자열 반환. */
+export async function requestPoseDetect(imageB64) {
+  const res = await fetch(API_BASE + '/api/pose-detect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: imageB64 }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+  if (!data.skeleton) throw new Error('스켈레톤을 받지 못했어요.');
+  return data.skeleton;
+}

@@ -14,6 +14,8 @@ dependencies = [
     "safetensors>=0.4",
     "Pillow>=10",
     "numpy>=1.26",
+    # 포즈 자동 추출 (DWPose ONNX, CPU 실행)
+    "onnxruntime>=1.17",
 ]
 
 [dependency-groups]
