@@ -57,7 +57,7 @@
   <div class="app-main">
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">✦</span>
+        <img class="brand-logo" src="logo.png" alt="Atelier AI 로고" />
         <h1>Atelier AI</h1>
         <span class="tagline">AI로 만드는 나만의 창작공간</span>
       </div>
