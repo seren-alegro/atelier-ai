@@ -102,11 +102,10 @@ jobs:
 
       - name: Tauri 빌드 (업데이터 서명 포함)
         shell: bash
+        working-directory: src-tauri
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          cd frontend
           npx @tauri-apps/cli@2 build --target ${{ matrix.target }}
 
       - name: 번들 업로드
