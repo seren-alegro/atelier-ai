@@ -16,3 +16,5 @@ src-tauri/target/
 # frozen 백엔드 산출물 (CI에서 빌드 시 생성)
 src-tauri/backend-dist/
 !src-tauri/backend-dist/.gitkeep
+
+src-tauri/gen/
