@@ -10,10 +10,10 @@
 //!    (예: `ATELIER_BACKEND_CMD="/opt/atelier/run-backend.sh"`)
 //! 2. 실행 파일 옆의 `atelier-backend` 사이드카 바이너리
 //!    (향후 PyInstaller 등으로 얼린 배포용 바이너리 자리)
-//! 3. 개발 레이아웃 — 실행 파일 기준 `../../backend` 디렉토리가 있으면
-//!    Python으로 `uvicorn atelier.api.app:app` 실행.
-//!    Windows에서는 `py -3` → `python` → `python3` 순으로,
-//!    Unix에서는 `python3` → `python` 순으로 탐색한다.
+//! 3. 개발 레이아웃 — 실행 파일 기준 `../../../backend` 디렉토리가 있으면
+//!    `backend/.venv`의 Python을 우선 사용하고, 없으면 OS에 맞는 Python으로
+//!    `uvicorn atelier.api.app:app` 실행.
+//!    (Windows: `py -3` → `python` → `python3`, Unix: `python3` → `python` 순으로 탐색.)
 //!
 //! 어떤 방법으로도 백엔드를 띄우지 못하면 앱은 그대로 실행되고,
 //! 프론트엔드는 내장 기본값(폴백) 모드로 동작한다.
@@ -89,11 +89,22 @@ fn find_backend() -> Option<SpawnSpec> {
         });
     }
 
-    // 3. 개발 레이아웃: <exe>/../../backend (src-tauri/target/{debug,release}/ 기준)
-    //    OS에 맞는 Python 탐색 (Windows: py -3 → python → python3)
-    let dev_backend = exe_dir.join("../../backend");
+    // 3. 개발 레이아웃: <exe>/../../../backend (src-tauri/target/{debug,release}/ 기준)
+    //    backend/.venv 의 Python을 우선 사용하고, 없으면 OS에 맞는 Python 탐색
+    let dev_backend = exe_dir.join("../../../backend");
     if dev_backend.join("pyproject.toml").is_file() {
-        if let Some((python, prefix)) = find_python() {
+        #[cfg(target_os = "windows")]
+        let venv_python = dev_backend.join(".venv").join("Scripts").join("python.exe");
+        #[cfg(not(target_os = "windows"))]
+        let venv_python = dev_backend.join(".venv").join("bin").join("python");
+
+        let python_spec: Option<(String, Vec<String>)> = if venv_python.is_file() {
+            Some((venv_python.to_string_lossy().into_owned(), Vec::new()))
+        } else {
+            find_python()
+        };
+
+        if let Some((python, prefix)) = python_spec {
             let mut args = prefix;
             args.extend(
                 [
