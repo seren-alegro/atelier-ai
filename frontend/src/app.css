@@ -180,10 +180,10 @@ html, body { height: 100%; }
   padding-bottom: 8px;
 }
 
-/* 퀵 패널 섹션 */
+/* 퀵 패널 섹션 — 테두리보다 명도 차이로 구분 */
 .qp-section {
-  background: linear-gradient(180deg, #272945 0%, var(--bg2) 100%);
-  border: 1px solid #35385f;
+  background: linear-gradient(180deg, #262845 0%, #20223a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
   padding: 14px 16px;
   box-shadow: var(--shadow-sm);
@@ -502,18 +502,18 @@ button { font-family: inherit; }
 .btn:active:not(:disabled) { transform: translateY(0); }
 
 .btn.primary {
-  background: linear-gradient(135deg, #93aef7 0%, #6f8fdd 55%, #5a76c8 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c5cff 55%, #6a3df0 100%);
   border: none;
-  color: #101223;
+  color: #fff;
   font-size: 16px;
   padding: 13px 32px;
   font-weight: 700;
   margin: 10px 0 6px;
-  box-shadow: 0 6px 20px rgba(122, 162, 247, 0.3);
+  box-shadow: 0 6px 20px rgba(124, 92, 255, 0.35);
 }
 
 .btn.primary:hover:not(:disabled) {
-  box-shadow: 0 8px 26px rgba(122, 162, 247, 0.42);
+  box-shadow: 0 8px 26px rgba(124, 92, 255, 0.5);
   transform: translateY(-1px);
 }
 

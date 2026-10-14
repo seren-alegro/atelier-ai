@@ -39,8 +39,8 @@
   }
 </script>
 
-<div class="qp-section">
-  <div class="qp-title">✦ 프롬프트 도우미</div>
+<details class="qp-section qp-details" open>
+  <summary class="qp-title">✦ 프롬프트 도우미</summary>
   <div class="helper-tabs">
     {#each GROUPS as g (g.id)}
       <button
@@ -65,4 +65,4 @@
     {/each}
   </div>
   <p class="hint">칩을 누르면 프롬프트에 태그가 추가돼요.</p>
-</div>
+</details>

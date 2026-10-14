@@ -122,7 +122,7 @@
           </nav>
 
           {#if tab === 'generate'}
-            <GenerateTab />
+            <GenerateTab onLoad={applyRecordParams} />
           {:else if tab === 'inpaint'}
             <InpaintTab />
           {:else if tab === 'pose'}
