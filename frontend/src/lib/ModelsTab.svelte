@@ -2,20 +2,17 @@
   import { onMount } from 'svelte';
   import { store } from './store.svelte.js';
   import {
-    fetchModels,
-    setActiveModel,
-    deleteModel,
-    refreshModels,
-  } from './api.js';
+    modelStore,
+    loadModels,
+    rescanModels,
+    activateModel,
+    removeModel,
+    checkpoints,
+    loras,
+  } from './models.svelte.js';
 
-  let data = $state(null); // {models_dir, active, models}
-  let notice = $state('');
-  let busy = $state(false);
-
-  const checkpoints = $derived(
-    (data?.models ?? []).filter((m) => m.kind === 'checkpoint')
-  );
-  const loras = $derived((data?.models ?? []).filter((m) => m.kind === 'lora'));
+  const cps = $derived(checkpoints());
+  const lrs = $derived(loras());
 
   function loraState(name) {
     if (!store.values.loras[name]) {
@@ -25,61 +22,25 @@
   }
 
   async function load() {
-    notice = '';
-    const res = await fetchModels();
-    if (!res) {
-      notice = '백엔드에 연결되지 않았어요. 백엔드를 먼저 실행해주세요.';
-      data = null;
-      return;
-    }
-    data = res;
+    await loadModels();
     // 사라진 LoRA의 선택 상태 정리
-    const names = new Set(loras.map((m) => m.name));
+    const names = new Set((modelStore.data?.models ?? []).map((m) => m.name));
     for (const k of Object.keys(store.values.loras)) {
       if (!names.has(k)) delete store.values.loras[k];
     }
   }
 
-  async function onSelect(name) {
-    notice = '';
-    busy = true;
-    try {
-      const res = await setActiveModel(name);
-      data = { ...data, active: res.active };
-    } catch (e) {
-      notice = e.message || '모델 전환에 실패했어요.';
-    } finally {
-      busy = false;
-    }
+  function onSelect(name) {
+    activateModel(name);
   }
 
-  async function onDelete(name) {
+  function onDelete(name) {
     if (!confirm(`'${name}'을(를) 삭제할까요? 되돌릴 수 없어요.`)) return;
-    notice = '';
-    busy = true;
-    try {
-      await deleteModel(name);
-      await load();
-    } catch (e) {
-      notice = e.message || '삭제에 실패했어요.';
-    } finally {
-      busy = false;
-    }
+    removeModel(name);
   }
 
-  async function onRefresh() {
-    busy = true;
-    try {
-      const res = await refreshModels();
-      if (res) {
-        data = res;
-        notice = '';
-      } else {
-        notice = '새로고침에 실패했어요.';
-      }
-    } finally {
-      busy = false;
-    }
+  function onRefresh() {
+    rescanModels();
   }
 
   function fmtSize(mb) {
@@ -92,46 +53,46 @@
 <div class="models-tab">
   <div class="models-head">
     <h3>모델 매니저</h3>
-    <button class="btn" onclick={onRefresh} disabled={busy}>
-      {busy ? '처리 중…' : '새로고침'}
+    <button class="btn" onclick={onRefresh} disabled={modelStore.loading}>
+      {modelStore.loading ? '처리 중…' : '새로고침'}
     </button>
   </div>
-  {#if notice}<p class="notice">{notice}</p>{/if}
+  {#if modelStore.notice}<p class="notice">{modelStore.notice}</p>{/if}
 
-  {#if data}
-    {#if checkpoints.length === 0 && loras.length === 0}
+  {#if modelStore.data}
+    {#if cps.length === 0 && lrs.length === 0}
       <div class="gallery-empty">
         모델이 하나도 없어요.<br />
         체크포인트(.safetensors / .ckpt)를 아래 폴더에 넣어주세요.<br />
-        <code>{data.models_dir}</code>
+        <code>{modelStore.data.models_dir}</code>
       </div>
     {:else}
-      <h4>체크포인트 ({checkpoints.length})</h4>
-      {#if checkpoints.length === 0}
+      <h4>체크포인트 ({cps.length})</h4>
+      {#if cps.length === 0}
         <p class="hint">체크포인트가 없어요.</p>
       {/if}
       <ul class="model-list">
-        {#each checkpoints as m (m.name)}
+        {#each cps as m (m.name)}
           <li>
             <label class="model-row">
               <input
                 type="radio"
                 name="active-model"
-                checked={data.active === m.name}
+                checked={modelStore.data.active === m.name}
                 onchange={() => onSelect(m.name)}
-                disabled={busy}
+                disabled={modelStore.loading}
               />
               <span class="model-name">{m.name}</span>
               <span class="model-meta">{fmtSize(m.size_mb)}</span>
-              {#if data.active === m.name}
+              {#if modelStore.data.active === m.name}
                 <span class="badge">사용 중</span>
               {/if}
             </label>
             <button
               class="btn danger small"
               onclick={() => onDelete(m.name)}
-              disabled={busy || data.active === m.name}
-              title={data.active === m.name ? '사용 중인 모델은 삭제할 수 없어요' : '삭제'}
+              disabled={modelStore.loading || modelStore.data.active === m.name}
+              title={modelStore.data.active === m.name ? '사용 중인 모델은 삭제할 수 없어요' : '삭제'}
             >
               삭제
             </button>
@@ -139,14 +100,14 @@
         {/each}
       </ul>
 
-      <h4>LoRA ({loras.length})</h4>
-      {#if loras.length === 0}
+      <h4>LoRA ({lrs.length})</h4>
+      {#if lrs.length === 0}
         <p class="hint">
           LoRA가 없어요. <code>lora/</code> 폴더에 넣으면 여기서 보여요.
         </p>
       {/if}
       <ul class="model-list">
-        {#each loras as m (m.name)}
+        {#each lrs as m (m.name)}
           {@const st = loraState(m.name)}
           <li class="lora-row">
             <label class="lora-toggle">
@@ -169,14 +130,14 @@
             <button
               class="btn danger small"
               onclick={() => onDelete(m.name)}
-              disabled={busy}
+              disabled={modelStore.loading}
             >
               삭제
             </button>
           </li>
         {/each}
       </ul>
-      {#if loras.length > 0}
+      {#if lrs.length > 0}
         <p class="hint">
           활성화한 LoRA는 생성 시 함께 전달돼요. (파이프라인 적용은 준비 중)
         </p>
