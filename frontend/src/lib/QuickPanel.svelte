@@ -5,14 +5,8 @@
   import PromptHelper from './PromptHelper.svelte';
   import ModelSelect from './ModelSelect.svelte';
   import QuickSlider from './QuickSlider.svelte';
+  import ResolutionPicker from './ResolutionPicker.svelte';
   import SettingField from './SettingField.svelte';
-
-  const RES_PRESETS = [
-    { label: '512×512', w: 512, h: 512 },
-    { label: '768×768', w: 768, h: 768 },
-    { label: '1024×1024', w: 1024, h: 1024 },
-    { label: '832×1216', w: 832, h: 1216, tag: '세로·추천' },
-  ];
 
   const SAMPLER_NAMES = {
     er_sde: 'ER SDE (추천)',
@@ -37,15 +31,6 @@
     store.meta.filter((s) => !QUICK_KEYS.has(s.key))
   );
 
-  function setRes(p) {
-    store.values.width = p.w;
-    store.values.height = p.h;
-  }
-
-  function isResActive(p) {
-    return store.values.width === p.w && store.values.height === p.h;
-  }
-
   function samplerName(opt) {
     return SAMPLER_NAMES[opt] ?? opt;
   }
@@ -60,19 +45,7 @@
 
 <div class="qp-section">
   <div class="qp-title">🖼 해상도</div>
-  <div class="seg-grid">
-    {#each RES_PRESETS as p (p.label)}
-      <button
-        class="seg-btn"
-        class:active={isResActive(p)}
-        onclick={() => setRes(p)}
-        title={p.tag ? `${p.label} (${p.tag})` : p.label}
-      >
-        <span>{p.label}</span>
-        {#if p.tag}<span class="seg-tag">{p.tag}</span>{/if}
-      </button>
-    {/each}
-  </div>
+  <ResolutionPicker />
 </div>
 
 <div class="qp-section">
