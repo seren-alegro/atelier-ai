@@ -288,11 +288,14 @@
   .canvas-stack {
     position: relative;
     line-height: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid #35385f;
   }
   .canvas-stack img {
     width: 100%;
     height: auto;
-    border-radius: 8px;
     display: block;
   }
   .mask-layer {
@@ -302,22 +305,27 @@
     height: 100%;
     touch-action: none;
     cursor: crosshair;
-    border-radius: 8px;
   }
   .toolbar {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
-    margin-top: 10px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px;
   }
   .btn.tool {
-    padding: 6px 12px;
+    padding: 7px 14px;
     font-size: 13px;
   }
   .btn.tool.active {
     border-color: var(--accent);
-    color: var(--accent);
+    color: #cdd9ff;
+    background: linear-gradient(180deg, rgba(122, 162, 247, 0.22), rgba(122, 162, 247, 0.1));
+    box-shadow: inset 0 0 0 1px rgba(122, 162, 247, 0.35);
   }
   .btn.tool:disabled {
     opacity: 0.4;
@@ -326,7 +334,7 @@
   .brush-label {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     font-size: 13px;
     color: var(--muted);
     flex: 1;
@@ -334,10 +342,10 @@
   }
   .brush-label input[type='range'] {
     flex: 1;
-    accent-color: var(--accent);
   }
   .brush-label span {
-    min-width: 48px;
+    min-width: 52px;
     color: var(--fg);
+    font-variant-numeric: tabular-nums;
   }
 </style>
