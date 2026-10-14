@@ -14,7 +14,9 @@ src-tauri/target/
 *.key.pub
 
 # frozen 백엔드 산출물 (CI에서 빌드 시 생성)
-src-tauri/backend-dist/
+# 주의: 디렉토리 자체를 제외하면 내부 파일의 ! 부정이 동작하지 않으므로
+# 내용물만 제외하고 .gitkeep은 추적한다.
+src-tauri/backend-dist/*
 !src-tauri/backend-dist/.gitkeep
 
 src-tauri/gen/
