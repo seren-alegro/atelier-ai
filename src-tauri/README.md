@@ -13,8 +13,9 @@
 2. **사이드카 바이너리** — 실행 파일 옆의 `atelier-backend`
    (향후 PyInstaller 등으로 얼린 배포용 바이너리 자리.
    인자 없이 실행하면 `127.0.0.1:8079`에서 서빙한다고 가정한다.)
-3. **개발 레이아웃** — 실행 파일 기준 `../../backend`에 `pyproject.toml`이 있으면
-   OS에 맞는 Python으로 `uvicorn atelier.api.app:app --host 127.0.0.1 --port 8079` 실행.
+3. **개발 레이아웃** — 실행 파일 기준 `../../../backend`에 `pyproject.toml`이 있으면
+   `backend/.venv`의 Python을 우선 사용하고, 없으면 OS에 맞는 Python으로
+   `uvicorn atelier.api.app:app --host 127.0.0.1 --port 8079` 실행.
    (Windows: `py -3` → `python` → `python3`, Unix: `python3` → `python` 순으로 탐색.)
    (`backend/`에서 `uv sync`로 의존성을 먼저 설치해야 한다.)
 
