@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from atelier.engine.pipeline import Pipeline
 from atelier.settings import validate
+from atelier.api.routes import history as history_module
 
 router = APIRouter()
 
@@ -112,6 +113,14 @@ def _run_job_sync(
         job["results"] = [
             "/api/results/" + os.path.basename(p) for p in paths
         ]
+        try:
+            history_module.append_record(
+                history_module.build_record(
+                    job_id, mode, params, job["results"]
+                )
+            )
+        except Exception as e:  # noqa: BLE001 - 기록 실패가 생성을 망치면 안 됨
+            print(f"[atelier] 작업내역 저장 실패: {e}")
     except Exception as e:  # noqa: BLE001 - 에러 메시지를 그대로 저장
         job["status"] = "error"
         job["error"] = str(e)

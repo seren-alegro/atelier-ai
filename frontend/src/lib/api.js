@@ -59,6 +59,47 @@ export async function requestGenerate(params, mode = 'txt2img', image = null, ma
   }
 }
 
+/** 썸네일 등에 쓰는 절대 URL (API_BASE + path) */
+export function apiUrl(path) {
+  return API_BASE + path;
+}
+
+/** GET /api/history — 실패 시 null */
+export async function fetchHistory(limit = 100) {
+  try {
+    const data = await getJson(`/api/history?limit=${limit}`);
+    return Array.isArray(data?.history) ? data.history : null;
+  } catch {
+    return null;
+  }
+}
+
+/** DELETE /api/history/{id} — 기록 삭제 (결과 파일은 유지) */
+export async function deleteHistory(id) {
+  const res = await fetch(
+    API_BASE + '/api/history/' + encodeURIComponent(id),
+    { method: 'DELETE' }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || '삭제에 실패했어요.');
+  }
+  return await res.json();
+}
+
+/** POST /api/history/{id}/favorite — 즐겨찾기 토글 */
+export async function toggleHistoryFavorite(id) {
+  const res = await fetch(
+    API_BASE + '/api/history/' + encodeURIComponent(id) + '/favorite',
+    { method: 'POST' }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || '즐겨찾기 변경에 실패했어요.');
+  }
+  return await res.json();
+}
+
 /** GET /api/models — 실패 시 null */
 export async function fetchModels() {
   try {

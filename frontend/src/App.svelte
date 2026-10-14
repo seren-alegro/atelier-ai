@@ -3,7 +3,9 @@
   import { store, initStore, reconnect } from './lib/store.svelte.js';
   import SideNav from './lib/SideNav.svelte';
   import QuickPanel from './lib/QuickPanel.svelte';
-  import PlaceholderPage from './lib/PlaceholderPage.svelte';
+  import HistoryTab from './lib/HistoryTab.svelte';
+  import LibraryTab from './lib/LibraryTab.svelte';
+  import TemplatesTab from './lib/TemplatesTab.svelte';
   import GenerateTab from './lib/GenerateTab.svelte';
   import InpaintTab from './lib/InpaintTab.svelte';
   import ModelsTab from './lib/ModelsTab.svelte';
@@ -35,23 +37,14 @@
     }
   }
 
-  const placeholders = {
-    library: {
-      icon: '🖼',
-      title: '라이브러리',
-      desc: '생성한 그림들을 모아보는 공간이에요.',
-    },
-    templates: {
-      icon: '📋',
-      title: '템플릿',
-      desc: '자주 쓰는 프롬프트 묶음을 저장해두는 공간이에요.',
-    },
-    history: {
-      icon: '🕒',
-      title: '작업내역',
-      desc: '생성 기록을 확인하는 공간이에요.',
-    },
-  };
+  /** 작업내역/라이브러리의 "설정 불러오기": 기록의 params를 스토어에 반영하고 생성 탭으로 이동 */
+  function applyRecordParams(params) {
+    if (params) {
+      store.values = { ...store.values, ...params };
+    }
+    nav = 'create';
+    tab = 'generate';
+  }
 
   onMount(() => {
     initStore();
@@ -113,8 +106,12 @@
           <QuickPanel />
         </aside>
       </div>
-    {:else}
-      <PlaceholderPage {...placeholders[nav]} />
+    {:else if nav === 'library'}
+      <LibraryTab onLoad={applyRecordParams} />
+    {:else if nav === 'templates'}
+      <TemplatesTab />
+    {:else if nav === 'history'}
+      <HistoryTab onLoad={applyRecordParams} />
     {/if}
   </div>
 </div>

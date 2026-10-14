@@ -27,6 +27,11 @@ LORA_DIR_NAMES = ("lora", "loras")
 _active_name: str | None = None
 
 
+def get_active_name() -> str | None:
+    """현재 활성 체크포인트 이름. 작업내역 기록용."""
+    return _active_name
+
+
 def models_dir() -> str:
     """모델 디렉토리 경로. 없으면 만들어 둔다."""
     d = os.environ.get("ATELIER_MODELS_DIR") or os.path.join(

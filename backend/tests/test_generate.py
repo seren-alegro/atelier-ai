@@ -60,6 +60,7 @@ class FakePipeline:
 def client(tmp_path, monkeypatch):
     out = tmp_path / "outputs"
     gen.set_pipeline(FakePipeline(str(out)))
+    monkeypatch.setenv("ATELIER_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.chdir(tmp_path)  # uploads/ 격리
     gen._jobs.clear()
     yield TestClient(app_module.app)
