@@ -71,6 +71,18 @@ Windows:
 
 The backend starts automatically with the app. To quit, just close the app.
 
+## LoRA training
+
+The "LoRA training" tab lets you train your own character/style LoRAs from your images.
+
+1. Pick a base checkpoint (Anima or other SDXL-based)
+2. Point to a folder of training images (15–30 recommended)
+3. Generate .txt captions with "batch auto-caption" (WD14 v3 Danbooru tags / BLIP natural language)
+4. Set trigger word, rank, learning rate, etc., then "start training"
+
+Results are saved to the `lora/` model folder and ready to use immediately.
+Training needs 12GB+ VRAM, so on machines without a GPU use an external GPU (e.g. RunPod).
+
 ## For developers
 
 ### Structure

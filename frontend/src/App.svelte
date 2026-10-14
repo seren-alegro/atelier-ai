@@ -10,6 +10,7 @@
   import InpaintTab from './lib/InpaintTab.svelte';
   import PoseTab from './lib/PoseTab.svelte';
   import ModelsTab from './lib/ModelsTab.svelte';
+  import TrainTab from './lib/TrainTab.svelte';
   import SettingsPanel from './lib/SettingsPanel.svelte';
   import { updateState, checkForUpdates, loadCurrentVersion } from './lib/updater.svelte.js';
 
@@ -23,6 +24,7 @@
     { id: 'inpaint', label: '인페인트' },
     { id: 'pose', label: '포즈' },
     { id: 'models', label: '모델' },
+    { id: 'train', label: 'LoRA 학습' },
     { id: 'settings', label: '설정' },
   ];
 
@@ -127,6 +129,8 @@
             <PoseTab />
           {:else if tab === 'models'}
             <ModelsTab />
+          {:else if tab === 'train'}
+            <TrainTab />
           {:else}
             <SettingsPanel />
           {/if}

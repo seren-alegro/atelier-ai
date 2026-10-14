@@ -204,3 +204,54 @@ export async function requestPoseDetect(imageB64) {
   if (!data.skeleton) throw new Error('스켈레톤을 받지 못했어요.');
   return data.skeleton;
 }
+
+/** POST /api/train — LoRA 학습 요청. {job_id, total_steps} 반환. */
+export async function requestTrain(trainParams) {
+  const res = await fetch(API_BASE + '/api/train', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(trainParams),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data.detail;
+    throw new Error(
+      typeof detail === 'string' ? detail
+      : Array.isArray(detail) ? detail.join(', ')
+      : `학습 요청 실패 (HTTP ${res.status})`
+    );
+  }
+  return data;
+}
+
+/** GET /api/train-jobs/{job_id} — 학습 진행 상태 조회. */
+export async function getTrainJob(jobId) {
+  const res = await fetch(API_BASE + '/api/train-jobs/' + jobId);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+/** POST /api/caption — 이미지 한 장 자동 캡션. */
+export async function requestCaption(imagePath, method = 'wd14') {
+  const res = await fetch(API_BASE + '/api/caption', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_path: imagePath, method }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data.caption;
+}
+
+/** POST /api/caption/batch — 폴더 전체 일괄 캡션. */
+export async function requestCaptionBatch(datasetDir, method = 'wd14', overwrite = false) {
+  const res = await fetch(API_BASE + '/api/caption/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataset_dir: datasetDir, method, overwrite }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
