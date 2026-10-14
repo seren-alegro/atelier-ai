@@ -14,32 +14,16 @@
   import SettingsPanel from './lib/SettingsPanel.svelte';
   import { updateState, checkForUpdates, loadCurrentVersion } from './lib/updater.svelte.js';
 
-  // 왼쪽 내비: create(작업공간) | library | templates | history
+  // 왼쪽 내비: create(이미지 만들기) | edit(이미지 편집) | models(모델 및 학습)
+  //            | library(라이브러리) | history(작업 기록) | settings(설정)
   let nav = $state('create');
-  // 가운데 탭: generate | inpaint | pose | models | settings
-  let tab = $state('generate');
-
-  const tabs = [
-    { id: 'generate', label: '생성' },
-    { id: 'inpaint', label: '인페인트' },
-    { id: 'pose', label: '포즈' },
-    { id: 'models', label: '모델' },
-    { id: 'train', label: 'LoRA 학습' },
-    { id: 'settings', label: '설정' },
-  ];
-
-  // 사이드바 하이라이트: 설정 탭이 열려 있으면 '설정'을 활성화
-  const sideActive = $derived(
-    nav !== 'create' ? nav : tab === 'settings' ? 'settings' : 'create'
-  );
+  // 서브탭 (두 개 화면을 가진 메뉴용)
+  let editTab = $state('inpaint');      // inpaint | pose
+  let modelsTab = $state('manage');     // manage | train
+  let libraryTab = $state('images');    // images | templates
 
   function onNav(id) {
-    if (id === 'settings') {
-      nav = 'create';
-      tab = 'settings';
-    } else {
-      nav = id;
-    }
+    nav = id;
   }
 
   /** 작업내역/라이브러리의 "설정 불러오기": 기록의 params+LoRA를 스토어에 반영하고 생성 탭으로 이동.
@@ -57,7 +41,6 @@
       store.values.loras = record.loras;
     }
     nav = 'create';
-    tab = 'generate';
   }
 
   onMount(() => {
@@ -72,7 +55,7 @@
 </script>
 
 <div class="app-layout">
-  <SideNav nav={sideActive} onSelect={onNav} />
+  <SideNav {nav} onSelect={onNav} />
 
   <div class="app-main">
     <header class="topbar">
@@ -108,43 +91,67 @@
     </header>
 
     {#if nav === 'create'}
+      <!-- 이미지 만들기: 생성 탭 + 오른쪽 인스펙터 -->
       <div class="workspace">
         <div class="center-col">
-          <nav class="tabs" aria-label="작업 탭">
-            {#each tabs as t (t.id)}
-              <button
-                class:active={tab === t.id}
-                onclick={() => (tab = t.id)}
-              >
-                {t.label}
-              </button>
-            {/each}
-          </nav>
-
-          {#if tab === 'generate'}
-            <GenerateTab onLoad={applyRecordParams} />
-          {:else if tab === 'inpaint'}
-            <InpaintTab />
-          {:else if tab === 'pose'}
-            <PoseTab />
-          {:else if tab === 'models'}
-            <ModelsTab />
-          {:else if tab === 'train'}
-            <TrainTab />
-          {:else}
-            <SettingsPanel />
-          {/if}
+          <GenerateTab onLoad={applyRecordParams} />
         </div>
-        <aside class="quick-panel" aria-label="설정 퀵 패널">
+        <aside class="quick-panel" aria-label="생성 설정">
           <QuickPanel />
         </aside>
       </div>
+    {:else if nav === 'edit'}
+      <!-- 이미지 편집: 인페인트 / 포즈 서브탭 + 오른쪽 인스펙터 -->
+      <div class="workspace">
+        <div class="center-col">
+          <nav class="subtabs" aria-label="편집 도구">
+            <button class:active={editTab === 'inpaint'} onclick={() => (editTab = 'inpaint')}>인페인트</button>
+            <button class:active={editTab === 'pose'} onclick={() => (editTab = 'pose')}>포즈</button>
+          </nav>
+          {#if editTab === 'inpaint'}
+            <InpaintTab />
+          {:else}
+            <PoseTab />
+          {/if}
+        </div>
+        <aside class="quick-panel" aria-label="생성 설정">
+          <QuickPanel hideHelper />
+        </aside>
+      </div>
+    {:else if nav === 'models'}
+      <!-- 모델 및 학습: 모델 관리 / LoRA 학습 서브탭 -->
+      <div class="workspace">
+        <div class="center-col">
+          <nav class="subtabs" aria-label="모델 및 학습">
+            <button class:active={modelsTab === 'manage'} onclick={() => (modelsTab = 'manage')}>모델 관리</button>
+            <button class:active={modelsTab === 'train'} onclick={() => (modelsTab = 'train')}>LoRA 학습</button>
+          </nav>
+          {#if modelsTab === 'manage'}
+            <ModelsTab />
+          {:else}
+            <TrainTab />
+          {/if}
+        </div>
+      </div>
     {:else if nav === 'library'}
-      <LibraryTab onLoad={applyRecordParams} />
-    {:else if nav === 'templates'}
-      <TemplatesTab />
+      <!-- 라이브러리: 이미지 / 템플릿 서브탭 -->
+      <div class="workspace">
+        <div class="center-col">
+          <nav class="subtabs" aria-label="라이브러리">
+            <button class:active={libraryTab === 'images'} onclick={() => (libraryTab = 'images')}>이미지</button>
+            <button class:active={libraryTab === 'templates'} onclick={() => (libraryTab = 'templates')}>템플릿</button>
+          </nav>
+          {#if libraryTab === 'images'}
+            <LibraryTab onLoad={applyRecordParams} />
+          {:else}
+            <TemplatesTab />
+          {/if}
+        </div>
+      </div>
     {:else if nav === 'history'}
       <HistoryTab onLoad={applyRecordParams} />
+    {:else if nav === 'settings'}
+      <SettingsPanel />
     {/if}
   </div>
 </div>

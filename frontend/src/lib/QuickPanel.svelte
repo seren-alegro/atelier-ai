@@ -1,6 +1,9 @@
 <script>
-  // 오른쪽 설정 퀵 패널: 도우미 + 모델 + 해상도 + 샘플러 + CFG + 스텝 + 고급 설정
+  // 오른쪽 인스펙터: 기본 모드(도우미·모델·해상도) + 고급 설정(접기)
   // 모든 컨트롤은 store.values에 바인딩되어 생성 요청에 그대로 반영된다.
+  // hideHelper: 편집 화면처럼 프롬프트 입력이 탭 안에 있을 때 도우미를 숨긴다.
+  let { hideHelper = false } = $props();
+
   import { store } from './store.svelte.js';
   import PromptHelper from './PromptHelper.svelte';
   import ModelSelect from './ModelSelect.svelte';
@@ -28,13 +31,11 @@
   const cfgMeta = $derived(store.meta.find((s) => s.key === 'cfg_scale'));
   const stepsMeta = $derived(store.meta.find((s) => s.key === 'steps'));
 
-  // 고급 설정: 프롬프트(중앙 패널)·퀵 패널 항목 제외, 나머지는 SettingField 재사용
-  const QUICK_KEYS = new Set([
-    'prompt', 'negative_prompt',
-    'width', 'height', 'sampler', 'cfg_scale', 'steps',
-  ]);
+  // 기본 모드에 보이는 키: 프롬프트(중앙)·도우미·모델·해상도
+  // 고급 설정에 들어가는 키: 샘플러·CFG·스텝 + 나머지 전부
+  const BASIC_KEYS = new Set(['prompt', 'negative_prompt', 'width', 'height']);
   const advancedSettings = $derived(
-    store.meta.filter((s) => !QUICK_KEYS.has(s.key))
+    store.meta.filter((s) => !BASIC_KEYS.has(s.key))
   );
 
   function samplerName(opt) {
@@ -42,7 +43,9 @@
   }
 </script>
 
-<PromptHelper />
+{#if !hideHelper}
+  <PromptHelper />
+{/if}
 
 <div class="qp-section">
   <div class="qp-title">🖼 모델 선택</div>
@@ -54,38 +57,29 @@
   <ResolutionPicker />
 </div>
 
-<div class="qp-section">
-  <div class="qp-title">🎲 샘플링 방법</div>
-  <select class="select" bind:value={store.values.sampler} aria-label="샘플링 방법">
-    <optgroup label="일반">
-      {#each samplerOptions.filter((o) => !LAB_SAMPLERS.has(o)) as opt (opt)}
-        <option value={opt}>{samplerName(opt)}</option>
-      {/each}
-    </optgroup>
-    <optgroup label="실험실">
-      {#each samplerOptions.filter((o) => LAB_SAMPLERS.has(o)) as opt (opt)}
-        <option value={opt}>{samplerName(opt)}</option>
-      {/each}
-    </optgroup>
-  </select>
-</div>
-
-<div class="qp-section">
-  {#if cfgMeta}
-    <QuickSlider setting={cfgMeta} />
-  {/if}
-</div>
-
-<div class="qp-section">
-  {#if stepsMeta}
-    <QuickSlider setting={stepsMeta} />
-  {/if}
-</div>
-
 <details class="qp-section qp-details">
   <summary class="qp-title">⚙ 고급 설정</summary>
   <div class="qp-advanced">
-    {#each advancedSettings as setting (setting.key)}
+    <div class="qp-sub">🎲 샘플링 방법</div>
+    <select class="select" bind:value={store.values.sampler} aria-label="샘플링 방법">
+      <optgroup label="일반">
+        {#each samplerOptions.filter((o) => !LAB_SAMPLERS.has(o)) as opt (opt)}
+          <option value={opt}>{samplerName(opt)}</option>
+        {/each}
+      </optgroup>
+      <optgroup label="실험실">
+        {#each samplerOptions.filter((o) => LAB_SAMPLERS.has(o)) as opt (opt)}
+          <option value={opt}>{samplerName(opt)}</option>
+        {/each}
+      </optgroup>
+    </select>
+    {#if cfgMeta}
+      <QuickSlider setting={cfgMeta} />
+    {/if}
+    {#if stepsMeta}
+      <QuickSlider setting={stepsMeta} />
+    {/if}
+    {#each advancedSettings.filter((s) => !['sampler', 'cfg_scale', 'steps'].includes(s.key)) as setting (setting.key)}
       <SettingField {setting} bind:value={store.values[setting.key]} />
     {/each}
   </div>
