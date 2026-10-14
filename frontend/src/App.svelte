@@ -39,15 +39,19 @@
     }
   }
 
-  /** 작업내역/라이브러리의 "설정 불러오기": 기록의 params를 스토어에 반영하고 생성 탭으로 이동.
+  /** 작업내역/라이브러리의 "설정 불러오기": 기록의 params+LoRA를 스토어에 반영하고 생성 탭으로 이동.
    *  현재 메타에 없는 키(예: 구버전 설정)는 제외 — 모르는 키가 들어가면 다음 생성이 422가 된다. */
-  function applyRecordParams(params) {
+  function applyRecordParams(record) {
+    const params = record?.params ?? record; // 구버전 호환: params 직접 전달
     if (params) {
       const known = new Set(store.meta.map((s) => s.key));
       const filtered = Object.fromEntries(
         Object.entries(params).filter(([k]) => known.has(k))
       );
       store.values = { ...store.values, ...filtered };
+    }
+    if (record?.loras && typeof record.loras === 'object') {
+      store.values.loras = record.loras;
     }
     nav = 'create';
     tab = 'generate';

@@ -34,16 +34,18 @@ class FakePipeline:
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
 
-    def txt2img(self, params: dict) -> list[str]:
+    def txt2img(self, params: dict, loras: dict | None = None) -> list[str]:
         assert "denoise_strength" not in params or isinstance(
             params["denoise_strength"], (int, float))
         return self._write("t")
 
-    def img2img(self, params: dict, image: str) -> list[str]:
+    def img2img(self, params: dict, image: str,
+                loras: dict | None = None) -> list[str]:
         assert image and os.path.isfile(image)
         return self._write("i")
 
-    def inpaint(self, params: dict, image: str, mask: str) -> list[str]:
+    def inpaint(self, params: dict, image: str, mask: str,
+                loras: dict | None = None) -> list[str]:
         assert image and os.path.isfile(image)
         assert mask and os.path.isfile(mask)
         return self._write("p")

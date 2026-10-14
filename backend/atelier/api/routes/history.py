@@ -74,7 +74,8 @@ def _write_all(records: list[dict]) -> None:
 
 
 def build_record(
-    job_id: str, mode: str, params: dict, results: list[str]
+    job_id: str, mode: str, params: dict, results: list[str],
+    loras: dict | None = None,
 ) -> dict:
     """job 완료 시 저장할 레코드를 만든다. 당시 활성 모델 이름도 함께 담는다."""
     try:
@@ -90,6 +91,7 @@ def build_record(
         "mode": mode,
         "model": model,
         "params": params,
+        "loras": loras or {},
         "results": results,
         "favorite": False,
     }

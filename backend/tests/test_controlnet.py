@@ -42,9 +42,11 @@ class FakePipeline:
         self.output_dir = output_dir
         self.last_pose_args: dict | None = None
 
-    def pose(self, params: dict, control_image: str) -> list[str]:
+    def pose(self, params: dict, control_image: str,
+             loras: dict | None = None) -> list[str]:
         assert control_image and os.path.isfile(control_image)
-        self.last_pose_args = {"params": params, "control_image": control_image}
+        self.last_pose_args = {"params": params, "control_image": control_image,
+                               "loras": loras}
         os.makedirs(self.output_dir, exist_ok=True)
         path = os.path.join(self.output_dir, "fake-pose.png")
         with open(path, "wb") as f:

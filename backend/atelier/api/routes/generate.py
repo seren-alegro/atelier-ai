@@ -46,6 +46,7 @@ class GenerateRequest(BaseModel):
     params: dict = Field(default_factory=dict)
     image: str | None = None  # base64 인코딩 이미지 (img2img/inpaint 원본, pose 포즈맵)
     mask: str | None = None   # base64 인코딩 마스크 (inpaint)
+    loras: dict | None = None  # {이름: {"enabled": bool, "strength": float}}
 
 
 def configure(model_path: str, output_dir: str = "outputs") -> None:
@@ -119,6 +120,7 @@ def _run_job_sync(
     params: dict,
     image_path: str | None,
     mask_path: str | None,
+    loras: dict | None,
 ) -> None:
     """백그라운드 생성 작업 (별도 스레드). 결과/에러를 job dict에 기록.
 
@@ -132,13 +134,13 @@ def _run_job_sync(
         pipe = get_pipeline()
         _ensure_loaded(pipe)
         if mode == "txt2img":
-            paths = pipe.txt2img(params)
+            paths = pipe.txt2img(params, loras)
         elif mode == "img2img":
-            paths = pipe.img2img(params, image_path)
+            paths = pipe.img2img(params, image_path, loras)
         elif mode == "pose":
-            paths = pipe.pose(params, image_path)
+            paths = pipe.pose(params, image_path, loras)
         else:
-            paths = pipe.inpaint(params, image_path, mask_path)
+            paths = pipe.inpaint(params, image_path, mask_path, loras)
         job["status"] = "done"
         job["results"] = [
             "/api/results/" + os.path.basename(p) for p in paths
@@ -146,7 +148,7 @@ def _run_job_sync(
         try:
             history_module.append_record(
                 history_module.build_record(
-                    job_id, mode, params, job["results"]
+                    job_id, mode, params, job["results"], loras
                 )
             )
         except Exception as e:  # noqa: BLE001 - 기록 실패가 생성을 망치면 안 됨
@@ -203,6 +205,7 @@ def generate(req: GenerateRequest):
         "job_id": job_id,
         "mode": req.mode,
         "params": req.params,
+        "loras": req.loras,
         "status": "queued",
         "created_at": time.time(),
         "results": [],
@@ -210,7 +213,7 @@ def generate(req: GenerateRequest):
     }
     thread = threading.Thread(
         target=_run_job_sync,
-        args=(job_id, req.mode, req.params, image_path, mask_path),
+        args=(job_id, req.mode, req.params, image_path, mask_path, req.loras),
         daemon=True,
         name=f"atelier-job-{job_id[:8]}",
     )

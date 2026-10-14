@@ -80,7 +80,7 @@
           {/if}
           <div class="card-actions">
             {#if onLoad}
-              <button class="btn small" onclick={() => onLoad(rec.params)}>
+              <button class="btn small" onclick={() => onLoad(rec)}>
                 설정 불러오기
               </button>
             {/if}

@@ -108,13 +108,76 @@ class Pipeline:
 
     # -- 생성 ----------------------------------------------------------
 
-    def txt2img(self, params: dict) -> list[str]:
+    def _resolve_lora(self, name: str) -> str | None:
+        """LoRA 이름(모델 목록의 상대경로)을 절대 경로로 바꾼다.
+        models dir 밖이거나 없는 파일이면 None (조용히 건너뜀)."""
+        from atelier.api.routes import models as models_module
+        try:
+            return models_module._resolve(name)
+        except Exception:  # noqa: BLE001 - 경로 조작/없는 파일은 건너뜀
+            return None
+
+    def _apply_loras(self, pipe, loras: dict | None) -> None:
+        """요청의 LoRA 선택을 파이프라인에 적용한다.
+
+        loras: {이름: {"enabled": bool, "strength": float}}
+        이름은 모델 목록의 name(상대경로). 파이프라인별 로드 캐시를 두어
+        같은 파일은 한 번만 로드한다. 아무것도 켜져 있지 않으면 비활성화.
+        """
+        cache = getattr(pipe, "_atelier_lora_cache", None)
+        if cache is None:
+            cache = {}
+            pipe._atelier_lora_cache = cache  # type: ignore[attr-defined]
+
+        active: list[tuple[str, float]] = []
+        if loras:
+            for name, info in loras.items():
+                if not isinstance(info, dict) or not info.get("enabled"):
+                    continue
+                try:
+                    strength = float(info.get("strength", 0.8))
+                except (TypeError, ValueError):
+                    strength = 0.8
+                path = self._resolve_lora(name)
+                if path is None:
+                    continue
+                adapter = cache.get(path)
+                if adapter is None:
+                    adapter = f"atelier_lora_{len(cache)}"
+                    try:
+                        pipe.load_lora_weights(path, adapter_name=adapter)
+                    except Exception as e:  # noqa: BLE001 - 깨진 LoRA는 건너뜀
+                        print(f"[atelier] LoRA 로드 실패 ({name}): {e}")
+                        continue
+                    cache[path] = adapter
+                active.append((adapter, strength))
+
+        if not active:
+            disable = getattr(pipe, "disable_lora", None)
+            if callable(disable):
+                try:
+                    disable()
+                except Exception:  # noqa: BLE001
+                    pass
+            return
+
+        names = [a for a, _ in active]
+        weights = [w for _, w in active]
+        try:
+            pipe.set_adapters(names, adapter_weights=weights)
+        except TypeError:
+            # 구버전 diffusers: 가중치 미지원
+            pipe.set_adapters(names)
+
+    def txt2img(self, params: dict, loras: dict | None = None) -> list[str]:
         """텍스트 → 이미지. 저장된 파일 경로 리스트 반환."""
         pipe, kwargs, seed = self._prepare(params, "sampler")
+        self._apply_loras(pipe, loras)
         images = pipe(**kwargs).images
         return self._save(images, seed, "txt2img")
 
-    def img2img(self, params: dict, image: str) -> list[str]:
+    def img2img(self, params: dict, image: str,
+                loras: dict | None = None) -> list[str]:
         """이미지 → 이미지. strength는 denoise_strength 설정값 사용."""
         from diffusers import AutoPipelineForImage2Image
         from PIL import Image
@@ -126,11 +189,13 @@ class Pipeline:
         i2i = AutoPipelineForImage2Image.from_pipe(
             pipe, trust_remote_code=False,
         ).to(self.device)
+        self._apply_loras(i2i, loras)
         images = i2i(image=Image.open(image).convert("RGB"),
                       strength=strength, **kwargs).images
         return self._save(images, seed, "img2img")
 
-    def inpaint(self, params: dict, image: str, mask: str) -> list[str]:
+    def inpaint(self, params: dict, image: str, mask: str,
+                loras: dict | None = None) -> list[str]:
         """인페인트. image 원본, mask 흰색=다시 그릴 영역.
         strength는 denoise_strength 설정값 사용."""
         from diffusers import AutoPipelineForInpainting
@@ -143,12 +208,14 @@ class Pipeline:
         inp = AutoPipelineForInpainting.from_pipe(
             pipe, trust_remote_code=False,
         ).to(self.device)
+        self._apply_loras(inp, loras)
         images = inp(image=Image.open(image).convert("RGB"),
                       mask_image=Image.open(mask).convert("RGB"),
                       strength=strength, **kwargs).images
         return self._save(images, seed, "inpaint")
 
-    def pose(self, params: dict, control_image: str) -> list[str]:
+    def pose(self, params: dict, control_image: str,
+             loras: dict | None = None) -> list[str]:
         """포즈 지정 생성 (ControlNet).
         control_image: 포즈맵(OpenPose 스켈레톤 PNG) 파일 경로.
         strength는 controlnet_strength 설정값 사용.
@@ -188,6 +255,7 @@ class Pipeline:
 
         sampler_name = p.get("sampler", defaults()["sampler"])
         apply_scheduler(pipe, sampler_name)
+        self._apply_loras(pipe, loras)
         kwargs, seed = self._common_kwargs(p)
         images = pipe(image=Image.open(control_image).convert("RGB"),
                       controlnet_conditioning_scale=strength,
