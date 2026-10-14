@@ -67,6 +67,23 @@ describe('requestGenerate', () => {
     );
   });
 
+  it('503이면 백엔드의 한국어 detail을 그대로 던진다 (GPU 없음)', async () => {
+    mockFetchOnce(503, {
+      detail:
+        'GPU를 찾을 수 없습니다. Atelier AI는 NVIDIA GPU(CUDA) 또는 Apple Silicon(Metal/MPS)이 필요합니다.',
+    });
+    await expect(requestGenerate({ prompt: 'x' })).rejects.toThrow(
+      'GPU를 찾을 수 없습니다.'
+    );
+  });
+
+  it('503에 detail이 없으면 모델 미설정 안내를 던진다', async () => {
+    mockFetchOnce(503, {});
+    await expect(requestGenerate({ prompt: 'x' })).rejects.toThrow(
+      '모델이 로드되지 않았어요'
+    );
+  });
+
   it('네트워크 실패면 한국어 메시지를 던진다', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('boom'));
     await expect(requestGenerate({ prompt: 'x' })).rejects.toThrow(

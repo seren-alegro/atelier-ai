@@ -56,7 +56,14 @@ export function requestGenerate(params, mode = 'txt2img', image = null, mask = n
       );
     }
     if (res.status === 503) {
-      throw new Error('모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.');
+      // 백엔드가 보낸 detail을 우선 표시 (GPU 없음 / 모델 미설정 구분)
+      const err = await res.json().catch(() => ({}));
+      const detail = err.detail;
+      throw new Error(
+        typeof detail === 'string' && detail
+          ? detail
+          : '모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.'
+      );
     }
     if (res.status === 413) {
       throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
