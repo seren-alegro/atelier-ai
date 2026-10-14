@@ -226,6 +226,7 @@ fn stop_backend(state: tauri::State<BackendProcess>) -> Result<(), String> {
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // 번들 리소스 디렉토리 (frozen 백엔드 탐색용)
             let resource_dir = app.path().resource_dir().ok();

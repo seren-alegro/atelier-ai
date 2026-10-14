@@ -10,6 +10,8 @@ edition = "2021"
 tauri = { version = "2", features = ["custom-protocol"] }
 # 롤링 릴리즈: GitHub Releases 기반 자동 업데이트
 tauri-plugin-updater = "2"
+# 업데이트 설치 후 앱 재시작 (프론트 relaunch)
+tauri-plugin-process = "2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
