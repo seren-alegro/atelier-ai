@@ -21,9 +21,11 @@ export const store = $state({
   loaded: false,
 });
 
-/** /api/settings를 불러오고, 성공하면 원격 값으로 교체 */
+/** /api/settings를 불러오고, 성공하면 원격 값으로 교체.
+ *  백엔드는 torch 임포트 때문에 시작이 수십 초 걸릴 수 있어서,
+ *  최대 60초간 2초 간격으로 재시도한다. */
 export async function initStore() {
-  const remote = await fetchSettingsMeta();
+  const remote = await fetchWithRetry(30, 2000);
   if (remote) {
     store.meta = remote;
     store.apiOnline = true;
@@ -33,6 +35,22 @@ export async function initStore() {
     store.values = values;
   }
   store.loaded = true;
+}
+
+async function fetchWithRetry(tries, intervalMs) {
+  for (let i = 0; i < tries; i++) {
+    const remote = await fetchSettingsMeta();
+    if (remote) return remote;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return null;
+}
+
+/** 헤더 배지 클릭 시 수동 재연결 */
+export async function reconnect() {
+  store.loaded = false;
+  store.apiOnline = false;
+  await initStore();
 }
 
 export function resetAll() {

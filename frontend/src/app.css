@@ -49,7 +49,11 @@ body {
   border-radius: 999px;
   background: var(--bg3);
   color: var(--muted);
+  border: none;
+  font-family: inherit;
 }
+
+.api-badge.offline { cursor: pointer; }
 
 .api-badge.online { background: #1f3d2b; color: var(--ok); }
 .api-badge.offline { background: #3d2f1f; color: var(--warn); }

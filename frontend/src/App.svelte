@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { store, initStore } from './lib/store.svelte.js';
+  import { store, initStore, reconnect } from './lib/store.svelte.js';
   import GenerateTab from './lib/GenerateTab.svelte';
   import InpaintTab from './lib/InpaintTab.svelte';
   import ModelsTab from './lib/ModelsTab.svelte';
@@ -21,15 +21,21 @@
 
 <header class="app-header">
   <h1>Atelier AI</h1>
-  <span class="api-badge" class:online={store.apiOnline} class:offline={store.loaded && !store.apiOnline}>
+  <button
+    class="api-badge"
+    class:online={store.apiOnline}
+    class:offline={store.loaded && !store.apiOnline}
+    onclick={() => { if (store.loaded && !store.apiOnline) reconnect(); }}
+    title={store.loaded && !store.apiOnline ? '클릭해서 다시 연결' : ''}
+  >
     {#if !store.loaded}
       연결 확인 중…
     {:else if store.apiOnline}
       백엔드 연결됨
     {:else}
-      백엔드 없음 · 기본값 사용 중
+      백엔드 없음 · 기본값 사용 중 (클릭해서 재시도)
     {/if}
-  </span>
+  </button>
 </header>
 
 <nav class="tabs">
