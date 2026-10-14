@@ -33,6 +33,7 @@ def resolve_controlnet_ref(model_ref: str | None) -> str:
     - 비어 있으면: HF 기본값 (openpose SDXL)
     - 존재하는 파일 경로면: 그대로
     - controlnet 폴더 안의 파일명이면: 절대 경로로
+    - models 폴더 기준 상대경로("controlnet/foo.safetensors")면: 절대 경로로
     - 그 외: HF repo id로 간주
     """
     ref = (model_ref or "").strip()
@@ -40,9 +41,15 @@ def resolve_controlnet_ref(model_ref: str | None) -> str:
         return DEFAULT_CONTROLNET
     if os.path.isfile(ref):
         return ref
-    cand = os.path.join(controlnet_models_dir(), ref)
+    cn_dir = controlnet_models_dir()
+    cand = os.path.join(cn_dir, ref)
     if os.path.isfile(cand):
         return cand
+    # 프론트 드롭다운은 models dir 기준 상대경로를 보낸다
+    base = os.path.dirname(cn_dir)
+    cand2 = os.path.join(base, ref)
+    if os.path.isfile(cand2):
+        return cand2
     return ref
 
 

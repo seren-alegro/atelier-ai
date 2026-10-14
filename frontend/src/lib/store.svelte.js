@@ -29,15 +29,22 @@ let epoch = 0;
 
 export async function initStore() {
   const myEpoch = ++epoch;
+  const before = { ...store.values }; // 대기 중 사용자 입력을 기억
   const remote = await fetchWithRetry(90, 2000, myEpoch);
   if (myEpoch !== epoch) return; // 새 루프가 시작됨 → 이 루프는 중단
   if (remote) {
     store.meta = remote;
     store.apiOnline = true;
-    const values = defaultsFrom(remote);
+    const fresh = defaultsFrom(remote);
     // 사용자가 이미 건드린 LoRA 선택은 유지
-    if (store.values.loras) values.loras = store.values.loras;
-    store.values = values;
+    if (store.values.loras) fresh.loras = store.values.loras;
+    // 연결 대기 중에 사용자가 바꾼 값은 덮어쓰지 않는다
+    for (const k of Object.keys(fresh)) {
+      if (k in before && store.values[k] !== before[k]) {
+        fresh[k] = store.values[k];
+      }
+    }
+    store.values = fresh;
   }
   store.loaded = true;
 }
@@ -57,6 +64,16 @@ export async function reconnect() {
   store.loaded = false;
   store.apiOnline = false;
   await initStore();
+}
+
+/** 백엔드 생존 확인 (주기적 체크용). 설정값은 건드리지 않고 배지만 갱신. */
+export async function checkBackendAlive() {
+  const remote = await fetchSettingsMeta();
+  const alive = !!remote;
+  if (alive && !store.apiOnline) {
+    store.meta = remote; // 끊겼다가 살아나면 메타만 갱신
+  }
+  store.apiOnline = alive;
 }
 
 export function resetAll() {

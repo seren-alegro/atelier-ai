@@ -92,6 +92,7 @@ SETTINGS: list[Setting] = [
                     "숫자를 고정하면 같은 구도를 다시 뽑을 수 있어요.",
         recommended=-1,
         min=-1,
+        max=2**32 - 1,  # torch.Generator.manual_seed 오버플로우 방지
     ),
     Setting(
         key="denoise_strength",

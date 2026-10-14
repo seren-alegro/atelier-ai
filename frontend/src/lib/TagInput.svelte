@@ -14,7 +14,15 @@
 
   function commitDraft() {
     const t = draft.trim().replace(/,+$/, '').trim();
-    if (t) value = [...tagList(), t].join(', ');
+    if (!t) {
+      draft = '';
+      return;
+    }
+    const list = tagList();
+    // 중복 태그 방지 (대소문자 무시)
+    if (!list.some((x) => x.toLowerCase() === t.toLowerCase())) {
+      value = [...list, t].join(', ');
+    }
     draft = '';
   }
 

@@ -7,8 +7,13 @@
   import { requestGenerate, requestPoseDetect } from './api.js';
   import { modelStore, loadModels, controlnets } from './models.svelte.js';
 
-  // backend/atelier/engine/controlnet.py의 DEFAULT_CONTROLNET과 동일하게 유지
-  const DEFAULT_CN_LABEL = '기본값 사용 (xinsir/controlnet-openpose-sdxl-1.0, 자동 다운로드)';
+  // 백엔드 controlnet.py의 DEFAULT_CONTROLNET과 동기화:
+  // 설정 설명문의 "기본값(...)"에서 파싱하므로 백엔드 설명이 바뀌면 따라간다.
+  const defaultCnId = $derived(
+    modelMeta()?.description?.match(/기본값\(([^)]+)\)/)?.[1]
+      ?? 'xinsir/controlnet-openpose-sdxl-1.0'
+  );
+  const defaultCnLabel = $derived(`기본값 사용 (${defaultCnId}, 자동 다운로드)`);
 
   const cns = $derived(controlnets());
   const strengthMeta = () => store.meta.find((m) => m.key === 'controlnet_strength');
@@ -23,6 +28,7 @@
   let detecting = $state(false);
   let notice = $state('');
   let results = $state([]);
+  let currentJob = $state(null);
 
   onMount(() => {
     if (!modelStore.data && !modelStore.loading) loadModels();
@@ -80,12 +86,14 @@
     try {
       const params = { ...store.values, controlnet_model: effectiveModel() };
       const image = posemapDataUrl.split(',')[1];
-      const paths = await requestGenerate(params, 'pose', image);
+      currentJob = requestGenerate(params, 'pose', image);
+      const paths = await currentJob;
       results = paths;
     } catch (e) {
       notice = e.message || '포즈 생성 중 오류가 발생했어요.';
     } finally {
       busy = false;
+      currentJob = null;
     }
   }
 </script>
@@ -150,7 +158,7 @@
         disabled={modelStore.loading}
         aria-label="ControlNet 모델 선택"
       >
-        <option value="">{DEFAULT_CN_LABEL}</option>
+        <option value="">{defaultCnLabel}</option>
         {#each cns as m (m.name)}
           <option value={m.name}>{m.name}</option>
         {/each}
@@ -199,6 +207,9 @@
   >
     {busy ? '그리는 중…' : '포즈로 생성하기'}
   </button>
+  {#if busy}
+    <button class="btn" onclick={() => currentJob?.cancel()}>취소</button>
+  {/if}
   {#if !posemapDataUrl}
     <p class="recommended">포즈맵을 먼저 불러오세요.</p>
   {/if}

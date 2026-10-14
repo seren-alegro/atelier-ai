@@ -218,3 +218,12 @@ def test_load_controlnet_empty_uses_default_pretrained(tmp_path, monkeypatch):
     cn.load_controlnet("")
     assert calls["via"] == "from_pretrained"
     assert calls["ref"] == cn.DEFAULT_CONTROLNET
+
+def test_resolve_models_relative_path(tmp_path, monkeypatch):
+    """프론트가 보내는 models dir 기준 상대경로("controlnet/pose.safetensors")."""
+    models = tmp_path / "models"
+    (models / "controlnet").mkdir(parents=True)
+    f = models / "controlnet" / "pose.safetensors"
+    f.write_bytes(b"x")
+    monkeypatch.setenv("ATELIER_MODELS_DIR", str(models))
+    assert cn.resolve_controlnet_ref("controlnet/pose.safetensors") == str(f)

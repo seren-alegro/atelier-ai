@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { store, initStore, reconnect } from './lib/store.svelte.js';
+  import { store, initStore, reconnect, checkBackendAlive } from './lib/store.svelte.js';
   import SideNav from './lib/SideNav.svelte';
   import QuickPanel from './lib/QuickPanel.svelte';
   import HistoryTab from './lib/HistoryTab.svelte';
@@ -39,10 +39,15 @@
     }
   }
 
-  /** 작업내역/라이브러리의 "설정 불러오기": 기록의 params를 스토어에 반영하고 생성 탭으로 이동 */
+  /** 작업내역/라이브러리의 "설정 불러오기": 기록의 params를 스토어에 반영하고 생성 탭으로 이동.
+   *  현재 메타에 없는 키(예: 구버전 설정)는 제외 — 모르는 키가 들어가면 다음 생성이 422가 된다. */
   function applyRecordParams(params) {
     if (params) {
-      store.values = { ...store.values, ...params };
+      const known = new Set(store.meta.map((s) => s.key));
+      const filtered = Object.fromEntries(
+        Object.entries(params).filter(([k]) => known.has(k))
+      );
+      store.values = { ...store.values, ...filtered };
     }
     nav = 'create';
     tab = 'generate';
@@ -50,6 +55,9 @@
 
   onMount(() => {
     initStore();
+    // 백엔드가 나중에 죽으면 배지에 반영 (30초 간격)
+    const timer = setInterval(() => { checkBackendAlive(); }, 30000);
+    return () => clearInterval(timer);
   });
 </script>
 

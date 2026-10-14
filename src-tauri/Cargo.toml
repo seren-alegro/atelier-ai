@@ -7,8 +7,7 @@ edition = "2021"
 # custom-protocol: devUrl 대신 tauri:// 커스텀 프로토콜로 내장 에셋을 서빙.
 # 이게 없으면 release 빌드에서도 localhost:5173(devUrl)을 찾으러 가서
 # "Could not connect to localhost"가 뜬다.
-# devtools: 디버깅용 (우클릭 → 요소 검사). 문제 해결 후 제거해도 된다.
-tauri = { version = "2", features = ["custom-protocol", "devtools"] }
+tauri = { version = "2", features = ["custom-protocol"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

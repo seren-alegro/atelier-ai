@@ -5,20 +5,22 @@
 
   let notice = $state('');
   let busy = $state(false);
-  // 목업 갤러리 (백엔드 연동 전)
   let results = $state([]);
+  let currentJob = $state(null);
 
   async function onGenerate() {
     notice = '';
     busy = true;
     try {
       const params = { ...store.values };
-      const paths = await requestGenerate(params);
+      currentJob = requestGenerate(params);
+      const paths = await currentJob;
       results = paths;
     } catch (e) {
       notice = e.message || '생성 중 오류가 발생했어요.';
     } finally {
       busy = false;
+      currentJob = null;
     }
   }
 </script>
@@ -36,9 +38,14 @@
     </div>
   </details>
 
-  <button class="btn primary" onclick={onGenerate} disabled={busy || !store.loaded}>
-    {busy ? '생성 중…' : '그림 생성하기'}
-  </button>
+  <div class="btn-row">
+    <button class="btn primary" onclick={onGenerate} disabled={busy || !store.loaded}>
+      {busy ? '생성 중…' : '그림 생성하기'}
+    </button>
+    {#if busy}
+      <button class="btn" onclick={() => currentJob?.cancel()}>취소</button>
+    {/if}
+  </div>
   {#if notice}<p class="notice">{notice}</p>{/if}
 
   <h3>결과</h3>

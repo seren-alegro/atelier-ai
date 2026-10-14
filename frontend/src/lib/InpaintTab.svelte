@@ -20,6 +20,7 @@
   let busy = $state(false);
   let notice = $state('');
   let results = $state([]);
+  let currentJob = $state(null);
   let hasMask = $state(false);
 
   const denoiseMeta = () => store.meta.find((m) => m.key === 'denoise_strength');
@@ -64,8 +65,12 @@
   }
 
   function pushUndo() {
-    undoStack.push({ view: viewCanvas.toDataURL(), off: offCanvas.toDataURL() });
-    if (undoStack.length > 30) undoStack.shift();
+    undoStack.push({
+      view: viewCanvas.toDataURL(),
+      off: offCanvas.toDataURL(),
+      hadMask: hasMask, // 스냅샷 시점의 마스크 유무 (undo 후 복원용)
+    });
+    if (undoStack.length > 10) undoStack.shift();
   }
 
   function drawStroke(ctx, x0, y0, x1, y1, erase, size, style) {
@@ -140,6 +145,7 @@
     if (!s) return;
     await restoreSnapshot(s.view, viewCanvas);
     await restoreSnapshot(s.off, offCanvas);
+    hasMask = !!s.hadMask; // 되돌린 시점에 마스크가 없었으면 비활성화
   }
 
   function clearMask() {
@@ -175,12 +181,14 @@
       const params = { ...store.values };
       const image = imageDataUrl.split(',')[1];
       const mask = exportMaskB64();
-      const paths = await requestGenerate(params, 'inpaint', image, mask);
+      currentJob = requestGenerate(params, 'inpaint', image, mask);
+      const paths = await currentJob;
       results = paths;
     } catch (e) {
       notice = e.message || '인페인트 중 오류가 발생했어요.';
     } finally {
       busy = false;
+      currentJob = null;
     }
   }
 </script>
@@ -267,6 +275,9 @@
   >
     {busy ? '그리는 중…' : '인페인트 실행'}
   </button>
+  {#if busy}
+    <button class="btn" onclick={() => currentJob?.cancel()}>취소</button>
+  {/if}
   {#if !hasMask && imageDataUrl}
     <p class="recommended">마스크를 먼저 칠해주세요.</p>
   {/if}

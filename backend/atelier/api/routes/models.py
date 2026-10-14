@@ -168,6 +168,9 @@ def delete_model(name: str):
             detail="사용 중인 모델은 삭제할 수 없어요. "
                    "먼저 다른 모델로 전환하세요.",
         )
+    if os.path.splitext(name)[1].lower() not in CHECKPOINT_EXTS:
+        raise HTTPException(
+            status_code=400, detail="모델 파일만 삭제할 수 있어요.")
     path = _resolve(name)
     os.remove(path)
     return {"deleted": name}

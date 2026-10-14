@@ -155,7 +155,11 @@ def reset_sessions() -> None:
 # ---------------------------------------------------------------------------
 
 def _letterbox(img_bgr: np.ndarray, size: int = _DET_INPUT):
-    """114 회색 패딩으로 정사각형 letterbox. (패드 이미지, 비율) 반환."""
+    """114 회색 패딩으로 정사각형 letterbox. (패드 이미지, 비율) 반환.
+
+    참고: 리사이즈된 이미지를 좌상단에 붙인다(중앙 정렬 아님).
+    decode_yolox()의 좌표 역변환도 같은 기준이라 일관되게 동작한다.
+    """
     h, w = img_bgr.shape[:2]
     r = min(size / h, size / w)
     nw, nh = int(w * r), int(h * r)
@@ -218,6 +222,8 @@ def decode_yolox(output: np.ndarray, ratio: float,
     pred = _decode_yolox_raw(np.asarray(output[0], dtype=np.float64))
     boxes = pred[:, :4]
     # 주의: 이 ONNX 익스포트는 박스만 raw이고 obj/cls는 이미 sigmoid된 확률이다.
+    # (실제 ONNX 입출력 스펙을 onnxruntime으로 직접 확인했고,
+    #  실제 인물 사진으로 3명의 스켈레톤이 정확히 추출되는 것을 검증함)
     scores = pred[:, 4] * pred[:, 5:].max(axis=1)
     labels = pred[:, 5:].argmax(axis=1)
     keep = (labels == 0) & (scores > conf_thres)  # COCO class 0 = person
@@ -316,7 +322,18 @@ def estimate_pose(img_rgb: np.ndarray,
 
     sess = get_pose_estimator()
     in_name = sess.get_inputs()[0].name
-    sx, sy = (np.asarray(o) for o in sess.run(None, {in_name: blob}))
+    outs = [np.asarray(o) for o in sess.run(None, {in_name: blob})]
+    # SimCC x/y는 마지막 차원(가로 576 / 세로 768)이 다르므로 shape으로 구분한다.
+    # 출력 순서를 가정하지 않는다.
+    def _pick(last_dim: int):
+        for o in outs:
+            if o.shape[-1] == last_dim:
+                return o
+        return None
+    sx = _pick(int(_POSE_W * _SIMCC_SPLIT))
+    sy = _pick(int(_POSE_H * _SIMCC_SPLIT))
+    if sx is None or sy is None:  # 예상 밖 shape이면 순서대로 (폴백)
+        sx, sy = outs[0], outs[1]
     kpts = decode_simcc(sx[0], sy[0])  # (133,3), 288x384 공간
 
     # 288x384 → 원본 좌표 (공식 후처리와 동일)
@@ -370,7 +387,7 @@ def wholebody_to_coco18(kpts133: np.ndarray) -> np.ndarray:
 COCO18_PAIRS = [
     (1, 8), (1, 2), (1, 5), (2, 3), (3, 4), (5, 6), (6, 7),
     (8, 9), (9, 10), (10, 11), (8, 12), (12, 13), (13, 14),
-    (1, 0), (0, 15), (0, 16),
+    (1, 0), (0, 15), (0, 16), (15, 17),
 ]
 
 

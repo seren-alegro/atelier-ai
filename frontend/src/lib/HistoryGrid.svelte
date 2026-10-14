@@ -13,6 +13,7 @@
     txt2img: '텍스트로 생성',
     img2img: '이미지로 생성',
     inpaint: '인페인트',
+    pose: '포즈 지정',
   };
 
   function fmtDate(ts) {

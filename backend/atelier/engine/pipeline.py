@@ -7,13 +7,14 @@
   이 모듈 자체는 GPU·torch 없이 import 가능하다.
 
 주의: strength(디노이즈 강도)는 settings.py의 denoise_strength 항목을 쓴다.
-("strength" 키도 하위 호환으로 받는다.)
+(엔진을 직접 호출할 때는 "strength" 키도 받는다. API 경로에서는
+validate()가 모르는 키를 422로 막으므로 denoise_strength를 쓸 것.)
 """
 
 from __future__ import annotations
 
 import os
-import time
+import uuid
 from datetime import datetime
 
 from atelier.engine.samplers import apply_scheduler
@@ -198,12 +199,11 @@ class Pipeline:
     def _save(self, images, seed: int, tag: str) -> list[str]:
         os.makedirs(self.output_dir, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        uniq = uuid.uuid4().hex[:6]  # 같은 초·같은 seed여도 충돌 방지
         paths = []
         for i, img in enumerate(images):
             path = os.path.join(
-                self.output_dir, f"{stamp}-{tag}-s{seed}-{i}.png")
+                self.output_dir, f"{stamp}-{tag}-s{seed}-{i}-{uniq}.png")
             img.save(path)
             paths.append(path)
-        # 같은 초에 여러 배치가 겹치면 파일명 충돌 방지
-        time.sleep(0.01)
         return paths

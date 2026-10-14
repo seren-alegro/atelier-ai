@@ -194,3 +194,64 @@ def test_no_pipeline_503(monkeypatch, tmp_path):
         assert "ATELIER_MODEL_PATH" in r.json()["detail"]
     finally:
         gen.set_pipeline(None)
+
+
+def test_upload_too_large_rejected(client, monkeypatch):
+    """50MB 초과 업로드는 413."""
+    monkeypatch.setattr(gen, "MAX_UPLOAD_BYTES", 10)
+    big = base64.b64encode(b"x" * 11).decode()
+    r = client.post("/api/generate",
+                    json={"mode": "img2img", "params": {}, "image": big})
+    assert r.status_code == 413
+
+
+def test_upload_cleaned_after_job(client):
+    """작업 완료 후 업로드 원본 파일이 삭제된다."""
+    import glob
+    img = base64.b64encode(make_png_bytes()).decode()
+    r = client.post("/api/generate",
+                    json={"mode": "img2img", "params": {}, "image": img})
+    assert r.status_code == 202
+    job_id = r.json()["job_id"]
+    # 백그라운드 스레드 완료 대기
+    for _ in range(100):
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] == "done":
+            break
+        time.sleep(0.05)
+    assert job["status"] == "done"
+    leftovers = glob.glob(os.path.join("uploads", f"{job_id}-*.png"))
+    assert leftovers == []
+
+
+def test_old_jobs_pruned(client):
+    """1시간 지난 완료 job은 새 요청 시 정리된다."""
+    old_id = "old-job-123"
+    gen._jobs[old_id] = {
+        "job_id": old_id, "mode": "txt2img", "params": {},
+        "status": "done", "created_at": time.time() - 7200,
+        "results": [], "error": None,
+    }
+    r = client.post("/api/generate",
+                    json={"mode": "txt2img", "params": {}})
+    assert r.status_code == 202
+    assert old_id not in gen._jobs
+
+
+def test_ensure_loaded_calls_load_once():
+    """_ensure_loaded: load()가 있으면 호출, 멱등이라 여러 번 안전."""
+    calls = []
+
+    class Loadable:
+        def load(self):
+            calls.append(1)
+            return self
+
+    gen._ensure_loaded(Loadable())
+    gen._ensure_loaded(Loadable())
+    assert len(calls) == 2  # 호출은 되지만 실제 Pipeline.load()는 내부에서 한 번만 수행
+
+
+def test_ensure_loaded_without_load_method():
+    """load()가 없는 파이프라인(FakePipeline)도 통과."""
+    gen._ensure_loaded(object())  # 예외 없어야 함

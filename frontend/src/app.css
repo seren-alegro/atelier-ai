@@ -511,6 +511,13 @@ button { font-family: inherit; }
   box-shadow: none;
 }
 
+.btn-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .panel-head {
   display: flex;
   justify-content: space-between;

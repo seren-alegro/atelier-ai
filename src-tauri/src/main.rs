@@ -27,6 +27,7 @@ const BACKEND_HOST: &str = "127.0.0.1";
 const BACKEND_PORT: &str = "8079";
 
 /// 실행 중인 백엔드 자식 프로세스. 앱 종료 시 kill 한다.
+/// (이미 떠 있던 백엔드를 재사용한 경우에는 None이라 kill하지 않는다.)
 struct BackendProcess(Mutex<Option<Child>>);
 
 struct SpawnSpec {
@@ -57,14 +58,42 @@ fn find_python() -> Option<(String, Vec<String>)> {
     None
 }
 
+/// 따옴표를 인식하는 명령줄 분리.
+/// `ATELIER_BACKEND_CMD="/opt/my dir/run.sh" --foo` 같은 공백 포함 경로를 다룬다.
+fn split_cmd(cmd: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut cur = String::new();
+    let mut in_quotes = false;
+    for ch in cmd.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            c if c.is_whitespace() && !in_quotes => {
+                if !cur.is_empty() {
+                    parts.push(std::mem::take(&mut cur));
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        parts.push(cur);
+    }
+    parts
+}
+
+/// 백엔드가 이미 떠 있는지 확인 (포트 선점 여부).
+fn backend_alive() -> bool {
+    std::net::TcpStream::connect(format!("{}:{}", BACKEND_HOST, BACKEND_PORT)).is_ok()
+}
+
 fn find_backend() -> Option<SpawnSpec> {
     // 1. 환경 변수로 직접 지정
     if let Ok(cmd) = std::env::var("ATELIER_BACKEND_CMD") {
-        let mut parts = cmd.split_whitespace();
+        let mut parts = split_cmd(&cmd).into_iter();
         if let Some(program) = parts.next() {
             return Some(SpawnSpec {
-                program: program.to_string(),
-                args: parts.map(str::to_string).collect(),
+                program,
+                args: parts.collect(),
                 cwd: std::env::var("ATELIER_BACKEND_DIR").ok().map(PathBuf::from),
             });
         }
@@ -135,6 +164,12 @@ fn spawn_backend() -> Option<Child> {
     let spec = find_backend()?;
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args).env("PYTHONUNBUFFERED", "1");
+    // Windows: 백엔드 실행 시 콘솔 창이 팝업되지 않게
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
     if let Some(cwd) = &spec.cwd {
         cmd.current_dir(cwd);
     }
@@ -160,8 +195,15 @@ fn spawn_backend() -> Option<Child> {
 fn main() {
     let app = tauri::Builder::default()
         .setup(|app| {
-            let child = spawn_backend();
-            if child.is_none() {
+            // 이미 떠 있는 백엔드가 있으면 새로 띄우지 않고 재사용한다.
+            // (포트 선점 시 uvicorn이 조용히 죽는 문제를 방지)
+            let child = if backend_alive() {
+                eprintln!("[atelier] 이미 실행 중인 백엔드를 사용합니다.");
+                None
+            } else {
+                spawn_backend()
+            };
+            if child.is_none() && !backend_alive() {
                 eprintln!("[atelier] 백엔드 없이 실행합니다.");
             }
             app.manage(BackendProcess(Mutex::new(child)));

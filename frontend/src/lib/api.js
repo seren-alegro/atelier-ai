@@ -24,39 +24,71 @@ export async function fetchSettingsMeta() {
   }
 }
 
-/** POST /api/generate — job 생성 후 폴링으로 완료 대기, 결과 URL 목록 반환 */
-export async function requestGenerate(params, mode = 'txt2img', image = null, mask = null) {
-  // loras는 settings 검증 대상이 아니므로 params에서 분리해 별도 필드로 전달.
-  // 파이프라인의 LoRA 적용 지원 전까지 백엔드는 무시한다.
-  const { loras, ...rest } = params;
-  const body = { mode, params: rest, image, mask };
-  if (loras) body.loras = loras;
-  const res = await fetch(API_BASE + '/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (res.status === 422) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || '설정값이 올바르지 않아요.');
-  }
-  if (res.status === 503) {
-    throw new Error('모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.');
-  }
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const { job_id } = await res.json();
+/** POST /api/generate — job 생성 후 폴링으로 완료 대기, 결과 URL 목록 반환.
+ *  반환된 promise에 .cancel()이 있다. 30분 타임아웃.
+ *  네트워크 에러 메시지는 한국어로 바꿔서 던진다. */
+export function requestGenerate(params, mode = 'txt2img', image = null, mask = null) {
+  const TIMEOUT_MS = 30 * 60 * 1000;
+  let cancelled = false;
+  const promise = (async () => {
+    // loras는 settings 검증 대상이 아니므로 params에서 분리해 별도 필드로 전달.
+    // 파이프라인의 LoRA 적용 지원 전까지 백엔드는 무시한다.
+    const { loras, ...rest } = params;
+    const body = { mode, params: rest, image, mask };
+    if (loras) body.loras = loras;
+    let res;
+    try {
+      res = await fetch(API_BASE + '/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+    }
+    if (res.status === 422) {
+      const err = await res.json().catch(() => ({}));
+      const detail = err.detail;
+      throw new Error(
+        typeof detail === 'string' ? detail
+        : Array.isArray(detail) ? detail.join(', ')
+        : '설정값이 올바르지 않아요.'
+      );
+    }
+    if (res.status === 503) {
+      throw new Error('모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.');
+    }
+    if (res.status === 413) {
+      throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
+    }
+    if (!res.ok) throw new Error(`요청 실패 (HTTP ${res.status})`);
+    const { job_id } = await res.json();
 
-  // 완료까지 폴링
-  for (;;) {
-    await new Promise((r) => setTimeout(r, 1000));
-    const job = await getJson(`/api/jobs/${job_id}`);
-    if (job.status === 'done') {
-      return job.results.map((u) => API_BASE + u);
+    // 완료까지 폴링
+    const start = Date.now();
+    for (;;) {
+      if (cancelled) throw new Error('취소됐어요.');
+      if (Date.now() - start > TIMEOUT_MS) {
+        throw new Error('시간이 너무 오래 걸려 중단했어요. (30분 초과)');
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+      let job;
+      try {
+        job = await getJson(`/api/jobs/${job_id}`);
+      } catch {
+        throw new Error('백엔드와의 연결이 끊겼어요.');
+      }
+      if (!job) throw new Error('작업 상태를 확인할 수 없어요.');
+      if (job.status === 'done') {
+        return job.results.map((u) => API_BASE + u);
+      }
+      if (job.status === 'error') {
+        throw new Error(job.error || '생성 중 오류가 발생했어요.');
+      }
     }
-    if (job.status === 'error') {
-      throw new Error(job.error || '생성 중 오류가 발생했어요.');
-    }
-  }
+  })();
+  promise.cancel = () => { cancelled = true; };
+  return promise;
 }
 
 /** 썸네일 등에 쓰는 절대 URL (API_BASE + path) */

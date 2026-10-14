@@ -27,12 +27,18 @@ from atelier.api.routes import history as history_module
 
 router = APIRouter()
 
-MODES = ("txt2img", "img2img", "inpaint", "pose")
-
 # job_id -> job dict. 키: job_id, mode, params, status, created_at, results, error
 _jobs: dict[str, dict] = {}
 
 _pipeline: Pipeline | None = None
+# RLock: get_pipeline() 안에서 _ensure_loaded()를 호출해도 데드락 없음
+_pipeline_lock = threading.RLock()
+
+# 업로드 크기 상한 (50MB). 로컬 앱이지만 거대 base64가 메모리/디스크를 고갈시키는 것을 방지.
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+# 완료된 job 보관 시간 (1시간). 무제한 증가로 인한 메모리 누수 방지.
+JOB_TTL_SECONDS = 3600
 
 
 class GenerateRequest(BaseModel):
@@ -43,8 +49,10 @@ class GenerateRequest(BaseModel):
 
 
 def configure(model_path: str, output_dir: str = "outputs") -> None:
-    """파이프라인을 설정한다."""
-    set_pipeline(Pipeline(model_path=model_path, output_dir=output_dir))
+    """파이프라인을 설정하고 로드한다."""
+    pipe = Pipeline(model_path=model_path, output_dir=output_dir)
+    _ensure_loaded(pipe)
+    set_pipeline(pipe)
 
 
 def set_pipeline(pipe: Pipeline | None) -> None:
@@ -54,19 +62,32 @@ def set_pipeline(pipe: Pipeline | None) -> None:
 
 
 def get_pipeline() -> Pipeline:
-    """설정된 파이프라인 반환. 미설정 시 503."""
+    """설정된 파이프라인 반환. 미설정 시 503. 로드까지 보장한다."""
+    global _pipeline
     if _pipeline is not None:
         return _pipeline
-    model_path = os.environ.get("ATELIER_MODEL_PATH")
-    if not model_path:
-        raise HTTPException(
-            status_code=503,
-            detail="모델이 설정되지 않았어요. "
-                   "ATELIER_MODEL_PATH 환경 변수에 체크포인트 경로를 설정하세요.",
-        )
-    configure(model_path)
-    assert _pipeline is not None
-    return _pipeline
+    with _pipeline_lock:
+        if _pipeline is not None:
+            return _pipeline
+        model_path = os.environ.get("ATELIER_MODEL_PATH")
+        if not model_path:
+            raise HTTPException(
+                status_code=503,
+                detail="모델이 설정되지 않았어요. "
+                       "ATELIER_MODEL_PATH 환경 변수에 체크포인트 경로를 설정하세요.",
+            )
+        pipe = Pipeline(model_path=model_path, output_dir="outputs")
+        _ensure_loaded(pipe)
+        _pipeline = pipe
+        return _pipeline
+
+
+def _ensure_loaded(pipe) -> None:
+    """파이프라인 로드를 보장한다. 여러 번 호출해도 한 번만 로드 (멱등)."""
+    load = getattr(pipe, "load", None)
+    if callable(load):
+        with _pipeline_lock:
+            load()
 
 
 def _save_upload(data_b64: str, job_id: str, name: str) -> str:
@@ -77,6 +98,12 @@ def _save_upload(data_b64: str, job_id: str, name: str) -> str:
         raise HTTPException(
             status_code=422,
             detail=f"{name} 이미지 데이터가 올바르지 않아요.",
+        )
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{name} 이미지가 너무 커요. "
+                   f"{MAX_UPLOAD_BYTES // (1024 * 1024)}MB 이하로 올려주세요.",
         )
     upload_dir = "uploads"
     os.makedirs(upload_dir, exist_ok=True)
@@ -103,6 +130,7 @@ def _run_job_sync(
     job["status"] = "running"
     try:
         pipe = get_pipeline()
+        _ensure_loaded(pipe)
         if mode == "txt2img":
             paths = pipe.txt2img(params)
         elif mode == "img2img":
@@ -126,6 +154,26 @@ def _run_job_sync(
     except Exception as e:  # noqa: BLE001 - 에러 메시지를 그대로 저장
         job["status"] = "error"
         job["error"] = str(e)
+    finally:
+        # 업로드 원본은 작업이 끝나면 삭제 (결과물은 output_dir에 따로 저장됨)
+        for p in (image_path, mask_path):
+            if p:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+
+def _prune_old_jobs() -> None:
+    """완료/실패한 지 오래된 job을 정리해 메모리 누수를 방지한다."""
+    now = time.time()
+    stale = [
+        jid for jid, job in _jobs.items()
+        if job["status"] in ("done", "error")
+        and now - job["created_at"] > JOB_TTL_SECONDS
+    ]
+    for jid in stale:
+        del _jobs[jid]
 
 
 @router.post("/api/generate", status_code=202)
@@ -150,6 +198,7 @@ def generate(req: GenerateRequest):
     job_id = uuid.uuid4().hex
     image_path = _save_upload(req.image, job_id, "image") if req.image else None
     mask_path = _save_upload(req.mask, job_id, "mask") if req.mask else None
+    _prune_old_jobs()
     _jobs[job_id] = {
         "job_id": job_id,
         "mode": req.mode,

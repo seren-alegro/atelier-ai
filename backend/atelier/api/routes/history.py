@@ -12,11 +12,16 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
+
+# JSONL 파일 동시 쓰기 방지 (favorite 토글과 append가 겹치면 기록 유실 가능)
+# RLock: read-modify-write 구간에서 _write_all을 호출해도 데드락 없음
+_history_lock = threading.RLock()
 
 
 def data_dir() -> str:
@@ -56,14 +61,16 @@ def append_record(record: dict) -> None:
     """생성 완료 기록을 JSONL에 추가한다."""
     record = dict(record)
     record.setdefault("favorite", False)
-    with open(history_path(), "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    with _history_lock:
+        with open(history_path(), "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def _write_all(records: list[dict]) -> None:
-    with open(history_path(), "w", encoding="utf-8") as f:
-        for rec in records:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    with _history_lock:
+        with open(history_path(), "w", encoding="utf-8") as f:
+            for rec in records:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
 def build_record(
@@ -99,28 +106,30 @@ def list_history(limit: int = 100):
 @router.delete("/api/history/{record_id}")
 def delete_history(record_id: str):
     """기록 삭제. 결과 이미지 파일은 남겨둔다."""
-    records = read_records()
-    kept = [r for r in records if r["id"] != record_id]
-    if len(kept) == len(records):
-        raise HTTPException(
-            status_code=404, detail="기록을 찾을 수 없어요."
-        )
-    _write_all(kept)
+    with _history_lock:
+        records = read_records()
+        kept = [r for r in records if r["id"] != record_id]
+        if len(kept) == len(records):
+            raise HTTPException(
+                status_code=404, detail="기록을 찾을 수 없어요."
+            )
+        _write_all(kept)
     return {"deleted": record_id}
 
 
 @router.post("/api/history/{record_id}/favorite")
 def toggle_favorite(record_id: str):
     """즐겨찾기 토글. 바뀐 상태를 반환한다."""
-    records = read_records()
-    new_value: bool | None = None
-    for r in records:
-        if r["id"] == record_id:
-            r["favorite"] = not r.get("favorite", False)
-            new_value = r["favorite"]
-    if new_value is None:
-        raise HTTPException(
-            status_code=404, detail="기록을 찾을 수 없어요."
-        )
-    _write_all(records)
+    with _history_lock:
+        records = read_records()
+        new_value: bool | None = None
+        for r in records:
+            if r["id"] == record_id:
+                r["favorite"] = not r.get("favorite", False)
+                new_value = r["favorite"]
+        if new_value is None:
+            raise HTTPException(
+                status_code=404, detail="기록을 찾을 수 없어요."
+            )
+        _write_all(records)
     return {"id": record_id, "favorite": new_value}
