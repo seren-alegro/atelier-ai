@@ -38,32 +38,26 @@ cargo build        # 디버그 빌드
 
 `tauri build`로 설치 패키지를 만들 때는 Tauri CLI가 필요하다.
 
-### 디버그 빌드에서는 dev 서버가 필요하다
+### 프론트엔드는 바이너리에 내장된다
 
-`cargo build`(디버그)는 개발 모드라서, Tauri가 `tauri.conf.json`의
-`devUrl`(http://localhost:5173)로 프론트엔드를 불러온다.
-그래서 앱을 실행하기 전에 프론트 dev 서버를 먼저 띄워야 한다.
-(안 띄우면 "Could not connect to localhost"가 뜬다.)
+`Cargo.toml`에서 tauri의 `custom-protocol` 기능을 켜 두었다.
+그래서 dev/release 상관없이 `frontend/dist`가 바이너리에 내장되고,
+dev 서버(localhost:5173) 없이 단독으로 실행된다.
 
-```sh
-# 터미널 1: 프론트 dev 서버
-cd frontend && npm run dev
-# 터미널 2: 백엔드 (앱이 자동 실행을 시도하지만, 직접 띄우는 게 확실하다)
-cd backend && uv run uvicorn atelier.api.app:app --host 127.0.0.1 --port 8079
-# 터미널 3: 앱
-cd src-tauri && ./target/debug/atelier-ai
-```
-
-### 독립 실행 바이너리가 필요하면
-
-`--release`로 빌드하면 프론트엔드(`frontend/dist`)가 바이너리에 내장된다.
-배포용은 이쪽이다.
+**주의**: 내장 시점의 `dist`가 들어가므로, 프론트를 고쳤으면
+반드시 `npm run build`를 먼저 다시 실행해야 한다.
 
 ```sh
-cd frontend && npm run build
+# 프론트 최신화
+cd frontend && npm install && npm run build
+# 앱 빌드
 cd ../src-tauri && cargo build --release
+# 실행 (dev 서버 필요 없음)
 ./target/release/atelier-ai
 ```
+
+백엔드는 앱 시작 시 자동으로 함께 실행된다.
+(`backend/`에서 `uv sync`로 의존성을 먼저 설치해 둘 것.)
 
 ### 필요한 시스템 패키지 (OS별 설치 명령어)
 
