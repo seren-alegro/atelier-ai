@@ -3,7 +3,7 @@
   import { store } from './store.svelte.js';
   import { historyStore, loadHistory } from './history.svelte.js';
   import TagInput from './TagInput.svelte';
-  import { requestGenerate, apiUrl } from './api.js';
+  import { requestGenerate, requestUpscale, apiUrl } from './api.js';
 
   let { onLoad = null } = $props();
 
@@ -12,6 +12,7 @@
   let results = $state([]);
   let currentJob = $state(null);
   let recentLoaded = $state(false);
+  let upscaling = $state({}); // src → true (업스케일 진행 중인 이미지)
 
   const recents = $derived(
     (historyStore.items ?? [])
@@ -45,6 +46,24 @@
 
   function onRecentClick(rec) {
     if (onLoad) onLoad(rec);
+  }
+
+  async function onUpscale(src) {
+    if (upscaling[src]) return;
+    notice = '';
+    upscaling[src] = true;
+    try {
+      // 강도는 0.5~1.0 (QuickPanel의 "업스케일 강도" 슬라이더)
+      const strength = Math.min(1, Math.max(0.5, store.values.upscale_strength ?? 0.5));
+      // 결과 파일명만 전달 (베이스 URL 제거 → 백엔드가 output dir에서 찾음)
+      const name = src.split('/').pop();
+      const url = await requestUpscale(name, strength);
+      results = [...results, url];
+    } catch (e) {
+      notice = e.message || '업스케일 중 오류가 발생했어요.';
+    } finally {
+      delete upscaling[src];
+    }
   }
 </script>
 
@@ -99,8 +118,18 @@
       {/if}
     {:else}
       <div class="gallery">
-        {#each results as src}
-          <img {src} alt="생성 결과" />
+        {#each results as src (src)}
+          <figure class="gallery-item">
+            <img {src} alt="생성 결과" />
+            <button
+              class="btn upscale-btn"
+              onclick={() => onUpscale(src)}
+              disabled={!!upscaling[src]}
+              title="RealESRGAN으로 4배 키우기 (강도는 우측 패널의 '업스케일 강도')"
+            >
+              {upscaling[src] ? '업스케일 중…' : '🔍 업스케일'}
+            </button>
+          </figure>
         {/each}
       </div>
     {/if}
@@ -200,9 +229,22 @@
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 12px;
   }
-  .gallery img {
+  .gallery-item {
+    margin: 0;
+    position: relative;
+  }
+  .gallery-item img {
     width: 100%;
     border-radius: 12px;
     display: block;
+  }
+  .upscale-btn {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    font-size: 12.5px;
+    padding: 7px 12px;
+    background: rgba(20, 22, 43, 0.85);
+    backdrop-filter: blur(4px);
   }
 </style>

@@ -8,6 +8,8 @@ function defaultsFrom(list) {
   for (const s of list) values[s.key] = s.recommended;
   // LoRA 선택 상태 (settings 검증 대상이 아님). {이름: {enabled, strength}}
   if (!values.loras) values.loras = {};
+  // 업스케일 강도 (QuickPanel 슬라이더, /api/upscale 요청에 사용)
+  if (values.upscale_strength === undefined) values.upscale_strength = 0.5;
   return values;
 }
 
@@ -36,8 +38,11 @@ export async function initStore() {
     store.meta = remote;
     store.apiOnline = true;
     const fresh = defaultsFrom(remote);
-    // 사용자가 이미 건드린 LoRA 선택은 유지
+    // 사용자가 이미 건드린 LoRA 선택·업스케일 강도는 유지
     if (store.values.loras) fresh.loras = store.values.loras;
+    if (store.values.upscale_strength !== undefined) {
+      fresh.upscale_strength = store.values.upscale_strength;
+    }
     // 연결 대기 중에 사용자가 바꾼 값은 덮어쓰지 않는다
     for (const k of Object.keys(fresh)) {
       if (k in before && store.values[k] !== before[k]) {

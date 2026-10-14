@@ -31,9 +31,9 @@ export function requestGenerate(params, mode = 'txt2img', image = null, mask = n
   const TIMEOUT_MS = 30 * 60 * 1000;
   let cancelled = false;
   const promise = (async () => {
-    // loras는 settings 검증 대상이 아니므로 params에서 분리해 별도 필드로 전달.
+    // loras·upscale_strength는 settings 검증 대상이 아니므로 params에서 분리.
     // 백엔드는 요청의 loras를 파이프라인에 실제로 적용한다.
-    const { loras, ...rest } = params;
+    const { loras, upscale_strength, ...rest } = params;
     const body = { mode, params: rest, image, mask };
     if (loras) body.loras = loras;
     let res;
@@ -203,6 +203,42 @@ export async function requestPoseDetect(imageB64) {
   }
   if (!data.skeleton) throw new Error('스켈레톤을 받지 못했어요.');
   return data.skeleton;
+}
+
+/** POST /api/upscale — RealESRGAN(4x) 업스케일.
+ *  image: 결과 파일명(output dir 안) 또는 base64 이미지.
+ *  strength: 0.5~1.0 (1=풀 업스케일, 0.5=절반만 적용).
+ *  첫 호출 시 모델 다운로드(18MB)로 수 분 걸릴 수 있어 타임아웃을 두지 않는다.
+ *  성공 시 완성된 이미지의 절대 URL 반환. */
+export async function requestUpscale(image, strength = 0.5) {
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/upscale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image, strength }),
+    });
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 422) {
+    throw new Error(
+      typeof data.detail === 'string' ? data.detail : '업스케일 설정값이 올바르지 않아요.'
+    );
+  }
+  if (res.status === 503) {
+    throw new Error(
+      typeof data.detail === 'string' && data.detail
+        ? data.detail
+        : '업스케일에는 GPU가 필요해요.'
+    );
+  }
+  if (res.status === 404) throw new Error('원본 이미지를 찾을 수 없어요.');
+  if (res.status === 413) throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
+  if (!res.ok) throw new Error(data.detail || `업스케일 실패 (HTTP ${res.status})`);
+  if (!data.url) throw new Error('업스케일 결과를 받지 못했어요.');
+  return API_BASE + data.url;
 }
 
 /** POST /api/train — LoRA 학습 요청. {job_id, total_steps} 반환. */
