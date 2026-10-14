@@ -27,7 +27,7 @@ from atelier.api.routes import history as history_module
 
 router = APIRouter()
 
-MODES = ("txt2img", "img2img", "inpaint")
+MODES = ("txt2img", "img2img", "inpaint", "pose")
 
 # job_id -> job dict. 키: job_id, mode, params, status, created_at, results, error
 _jobs: dict[str, dict] = {}
@@ -36,9 +36,9 @@ _pipeline: Pipeline | None = None
 
 
 class GenerateRequest(BaseModel):
-    mode: Literal["txt2img", "img2img", "inpaint"]
+    mode: Literal["txt2img", "img2img", "inpaint", "pose"]
     params: dict = Field(default_factory=dict)
-    image: str | None = None  # base64 인코딩 원본 이미지 (img2img/inpaint)
+    image: str | None = None  # base64 인코딩 이미지 (img2img/inpaint 원본, pose 포즈맵)
     mask: str | None = None   # base64 인코딩 마스크 (inpaint)
 
 
@@ -107,6 +107,8 @@ def _run_job_sync(
             paths = pipe.txt2img(params)
         elif mode == "img2img":
             paths = pipe.img2img(params, image_path)
+        elif mode == "pose":
+            paths = pipe.pose(params, image_path)
         else:
             paths = pipe.inpaint(params, image_path, mask_path)
         job["status"] = "done"
@@ -139,6 +141,10 @@ def generate(req: GenerateRequest):
         raise HTTPException(
             status_code=422,
             detail="인페인트에는 원본 이미지와 마스크가 필요해요.")
+    if req.mode == "pose" and not req.image:
+        raise HTTPException(
+            status_code=422,
+            detail="포즈 지정에는 포즈맵 이미지가 필요해요.")
     get_pipeline()  # 미설정 시 여기서 503 (fail-fast)
 
     job_id = uuid.uuid4().hex

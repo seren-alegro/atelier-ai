@@ -23,6 +23,7 @@ router = APIRouter()
 
 CHECKPOINT_EXTS = (".safetensors", ".ckpt")
 LORA_DIR_NAMES = ("lora", "loras")
+CONTROLNET_DIR_NAMES = ("controlnet", "controlnets")
 
 _active_name: str | None = None
 
@@ -56,14 +57,23 @@ def _scan() -> list[dict]:
             full = os.path.join(root, f)
             rel = os.path.relpath(full, base).replace(os.sep, "/")
             parts = rel.split("/")
+            is_controlnet = any(
+                p.lower() in CONTROLNET_DIR_NAMES for p in parts[:-1]
+            )
             is_lora = any(
                 p.lower() in LORA_DIR_NAMES for p in parts[:-1]
             ) or "lora" in f.lower()
+            if is_controlnet:
+                kind = "controlnet"
+            elif is_lora:
+                kind = "lora"
+            else:
+                kind = "checkpoint"
             st = os.stat(full)
             items.append(
                 {
                     "name": rel,
-                    "kind": "lora" if is_lora else "checkpoint",
+                    "kind": kind,
                     "size_mb": round(st.st_size / (1024 * 1024), 1),
                     "modified": datetime.fromtimestamp(st.st_mtime).isoformat(
                         timespec="seconds"

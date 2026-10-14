@@ -83,4 +83,20 @@ export const FALLBACK_SETTINGS = [
     kind: 'number',
     min: 1, max: 8, options: [], unit: '장',
   },
+  {
+    key: 'controlnet_model',
+    label: 'ControlNet 모델',
+    description: '포즈 지정에 쓸 ControlNet 모델이에요. models/controlnet/ 폴더에 .safetensors 파일을 넣으면 목록에서 고를 수 있고, HuggingFace repo id를 직접 적어도 돼요. 비워두면 기본값(xinsir/controlnet-openpose-sdxl-1.0)을 받아와요.',
+    recommended: '',
+    kind: 'text',
+    min: null, max: null, options: [], unit: '',
+  },
+  {
+    key: 'controlnet_strength',
+    label: 'ControlNet 강도',
+    description: '포즈를 얼마나 따를지 정해요. 높을수록 포즈맵을 빡빡하게 따르고, 낮을수록 포즈에서 자유로워져요.',
+    recommended: 0.8,
+    kind: 'number',
+    min: 0.0, max: 1.0, options: [], unit: '',
+  },
 ];

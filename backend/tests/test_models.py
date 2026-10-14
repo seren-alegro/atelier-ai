@@ -35,9 +35,11 @@ class FakePipeline:
 def client(tmp_path, monkeypatch):
     models_dir = tmp_path / "models"
     (models_dir / "lora").mkdir(parents=True)
+    (models_dir / "controlnet").mkdir(parents=True)
     (models_dir / "anima.safetensors").write_bytes(b"x" * 1024)
     (models_dir / "other.ckpt").write_bytes(b"y" * 2048)
     (models_dir / "lora" / "style-lora.safetensors").write_bytes(b"z" * 512)
+    (models_dir / "controlnet" / "openpose.safetensors").write_bytes(b"w" * 256)
     (models_dir / "readme.txt").write_text("무시됨")
     monkeypatch.setenv("ATELIER_MODELS_DIR", str(models_dir))
     monkeypatch.setattr(models, "Pipeline", FakePipeline)
@@ -58,6 +60,7 @@ def test_list_models(client):
     assert by_name["anima.safetensors"]["kind"] == "checkpoint"
     assert by_name["other.ckpt"]["kind"] == "checkpoint"
     assert by_name["lora/style-lora.safetensors"]["kind"] == "lora"
+    assert by_name["controlnet/openpose.safetensors"]["kind"] == "controlnet"
     assert "readme.txt" not in by_name
     assert by_name["anima.safetensors"]["size_mb"] >= 0
     assert "modified" in by_name["anima.safetensors"]

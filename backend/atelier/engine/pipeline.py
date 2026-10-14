@@ -22,6 +22,7 @@ from atelier.settings import defaults, validate
 # settings.py에 strength 항목이 생기기 전까지 쓰는 기본값. 실측 후 조정.
 DEFAULT_IMG2IMG_STRENGTH = 0.75
 DEFAULT_INPAINT_STRENGTH = 0.75
+DEFAULT_CONTROLNET_STRENGTH = 0.8
 
 
 class Pipeline:
@@ -39,6 +40,7 @@ class Pipeline:
         self.device = device          # None이면 자동 판별
         self.torch_dtype = torch_dtype  # None이면 자동 판별
         self._pipe = None
+        self._controlnet_pipes: dict = {}  # controlnet ref -> SDXL ControlNet 파이프라인
 
     # -- 로드 ----------------------------------------------------------
 
@@ -144,6 +146,52 @@ class Pipeline:
                       mask_image=Image.open(mask).convert("RGB"),
                       strength=strength, **kwargs).images
         return self._save(images, seed, "inpaint")
+
+    def pose(self, params: dict, control_image: str) -> list[str]:
+        """포즈 지정 생성 (ControlNet).
+        control_image: 포즈맵(OpenPose 스켈레톤 PNG) 파일 경로.
+        strength는 controlnet_strength 설정값 사용.
+
+        주의: SDXL 전용 파이프라인을 쓴다 (Anima는 SDXL 기반).
+        SD1.5 체크포인트에서는 StableDiffusionControlNetPipeline으로
+        교체해야 함 — 실측 필요.
+        """
+        import torch
+        from diffusers import StableDiffusionXLControlNetPipeline
+        from PIL import Image
+
+        from atelier.engine.controlnet import (
+            load_controlnet,
+            resolve_controlnet_ref,
+        )
+
+        p = dict(params)
+        strength = p.pop("controlnet_strength", DEFAULT_CONTROLNET_STRENGTH)
+        model_ref = p.pop("controlnet_model", "")
+
+        device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
+        dtype_name = self.torch_dtype or (
+            "float16" if device == "cuda" else "float32")
+        dtype = getattr(torch, dtype_name)
+        self.device = device
+
+        ref = resolve_controlnet_ref(model_ref)
+        if ref not in self._controlnet_pipes:
+            controlnet = load_controlnet(ref, torch_dtype=dtype)
+            cn_pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+                self.model_path, controlnet=controlnet,
+                torch_dtype=dtype, trust_remote_code=False,
+            ).to(device)
+            self._controlnet_pipes[ref] = cn_pipe
+        pipe = self._controlnet_pipes[ref]
+
+        sampler_name = p.get("sampler", defaults()["sampler"])
+        apply_scheduler(pipe, sampler_name)
+        kwargs, seed = self._common_kwargs(p)
+        images = pipe(image=Image.open(control_image).convert("RGB"),
+                      controlnet_conditioning_scale=strength,
+                      **kwargs).images
+        return self._save(images, seed, "pose")
 
     # -- 저장 ----------------------------------------------------------
 

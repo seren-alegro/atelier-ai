@@ -75,3 +75,8 @@ export function checkpoints() {
 export function loras() {
   return (modelStore.data?.models ?? []).filter((m) => m.kind === 'lora');
 }
+
+/** ControlNet만 */
+export function controlnets() {
+  return (modelStore.data?.models ?? []).filter((m) => m.kind === 'controlnet');
+}

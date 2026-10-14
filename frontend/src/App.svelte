@@ -8,17 +8,19 @@
   import TemplatesTab from './lib/TemplatesTab.svelte';
   import GenerateTab from './lib/GenerateTab.svelte';
   import InpaintTab from './lib/InpaintTab.svelte';
+  import PoseTab from './lib/PoseTab.svelte';
   import ModelsTab from './lib/ModelsTab.svelte';
   import SettingsPanel from './lib/SettingsPanel.svelte';
 
   // 왼쪽 내비: create(작업공간) | library | templates | history
   let nav = $state('create');
-  // 가운데 탭: generate | inpaint | models | settings
+  // 가운데 탭: generate | inpaint | pose | models | settings
   let tab = $state('generate');
 
   const tabs = [
     { id: 'generate', label: '생성' },
     { id: 'inpaint', label: '인페인트' },
+    { id: 'pose', label: '포즈' },
     { id: 'models', label: '모델' },
     { id: 'settings', label: '설정' },
   ];
@@ -96,6 +98,8 @@
             <GenerateTab />
           {:else if tab === 'inpaint'}
             <InpaintTab />
+          {:else if tab === 'pose'}
+            <PoseTab />
           {:else if tab === 'models'}
             <ModelsTab />
           {:else}

@@ -9,10 +9,12 @@
     removeModel,
     checkpoints,
     loras,
+    controlnets,
   } from './models.svelte.js';
 
   const cps = $derived(checkpoints());
   const lrs = $derived(loras());
+  const cns = $derived(controlnets());
 
   function loraState(name) {
     if (!store.values.loras[name]) {
@@ -142,6 +144,28 @@
           활성화한 LoRA는 생성 시 함께 전달돼요. (파이프라인 적용은 준비 중)
         </p>
       {/if}
+
+      <h4>ControlNet ({cns.length})</h4>
+      {#if cns.length === 0}
+        <p class="hint">
+          ControlNet이 없어요. <code>controlnet/</code> 폴더에 .safetensors를 넣으면 여기서 보여요.
+        </p>
+      {/if}
+      <ul class="model-list">
+        {#each cns as m (m.name)}
+          <li class="lora-row">
+            <span class="model-name">{m.name}</span>
+            <span class="model-meta">{fmtSize(m.size_mb)}</span>
+            <button
+              class="btn danger small"
+              onclick={() => onDelete(m.name)}
+              disabled={modelStore.loading}
+            >
+              삭제
+            </button>
+          </li>
+        {/each}
+      </ul>
     {/if}
   {/if}
 </div>
