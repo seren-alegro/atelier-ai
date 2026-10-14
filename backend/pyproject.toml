@@ -16,6 +16,8 @@ dependencies = [
     "numpy>=1.26",
     # 포즈 자동 추출 (DWPose ONNX, CPU 실행)
     "onnxruntime>=1.17",
+    # 얼굴 검출 (ADetailer face_yolov8n, ultralytics YOLO)
+    "ultralytics>=8.3",
     # LoRA 학습 (diffusers + peft 직접 구현)
     "peft>=0.12",
     "transformers>=4.44",  # BLIP 자동 캡션용 (diffusers가 이미 요구)

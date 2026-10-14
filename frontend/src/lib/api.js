@@ -241,6 +241,53 @@ export async function requestUpscale(image, strength = 0.5) {
   return API_BASE + data.url;
 }
 
+/** POST /api/adetailer — ADetailer 스타일 얼굴 보정 (얼굴 검출 + 인페인트).
+ *  image: 결과 파일명(output dir 안) 또는 base64 이미지.
+ *  opts: {prompt, negative_prompt, denoising_strength(0~1, 기본 0.4),
+ *         conf(기본 0.5), mask_padding(기본 32)}.
+ *  첫 호출 시 모델 다운로드(6MB)로 시간이 걸릴 수 있어 타임아웃을 두지 않는다.
+ *  성공 시 {url: 완성된 이미지의 절대 URL, faces_detected: 검출된 얼굴 수} 반환.
+ *  얼굴이 없으면 faces_detected가 0이고 url은 원본 그대로. */
+export async function requestAdetailer(image, opts = {}) {
+  const {
+    prompt = '',
+    negative_prompt = '',
+    denoising_strength = 0.4,
+    conf = 0.5,
+    mask_padding = 32,
+  } = opts;
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/adetailer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image, prompt, negative_prompt, denoising_strength, conf, mask_padding,
+      }),
+    });
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 422) {
+    throw new Error(
+      typeof data.detail === 'string' ? data.detail : '얼굴 보정 설정값이 올바르지 않아요.'
+    );
+  }
+  if (res.status === 503) {
+    throw new Error(
+      typeof data.detail === 'string' && data.detail
+        ? data.detail
+        : '얼굴 보정에는 GPU가 필요해요.'
+    );
+  }
+  if (res.status === 404) throw new Error('원본 이미지를 찾을 수 없어요.');
+  if (res.status === 413) throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
+  if (!res.ok) throw new Error(data.detail || `얼굴 보정 실패 (HTTP ${res.status})`);
+  if (!data.url) throw new Error('얼굴 보정 결과를 받지 못했어요.');
+  return { url: API_BASE + data.url, faces_detected: data.faces_detected ?? 0 };
+}
+
 /** POST /api/train — LoRA 학습 요청. {job_id, total_steps} 반환. */
 export async function requestTrain(trainParams) {
   const res = await fetch(API_BASE + '/api/train', {

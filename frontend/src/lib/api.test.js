@@ -1,6 +1,6 @@
 // api.js 테스트 — fetch를 모킹해 요청 body 구성과 에러 메시지 변환을 검증.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { requestGenerate } from './api.js';
+import { requestGenerate, requestAdetailer } from './api.js';
 
 const API = 'http://127.0.0.1:8079';
 
@@ -97,5 +97,65 @@ describe('requestGenerate', () => {
     const p = requestGenerate({ prompt: 'x' });
     p.cancel();
     await expect(p).rejects.toThrow('취소');
+  });
+});
+
+describe('requestAdetailer', () => {
+  it('성공하면 {url, faces_detected}를 반환한다', async () => {
+    mockFetchOnce(200, {
+      url: '/api/results/20261015-inpaint.png',
+      faces_detected: 2,
+    });
+    const r = await requestAdetailer('a.png', {
+      prompt: '1girl',
+      negative_prompt: 'lowres',
+      denoising_strength: 0.4,
+    });
+    expect(r).toEqual({
+      url: API + '/api/results/20261015-inpaint.png',
+      faces_detected: 2,
+    });
+    const sentBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(sentBody.image).toBe('a.png');
+    expect(sentBody.prompt).toBe('1girl');
+    expect(sentBody.negative_prompt).toBe('lowres');
+    expect(sentBody.denoising_strength).toBe(0.4);
+  });
+
+  it('기본값을 채워 보낸다', async () => {
+    mockFetchOnce(200, { url: '/r/1.png', faces_detected: 0 });
+    await requestAdetailer('a.png');
+    const sentBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(sentBody.denoising_strength).toBe(0.4);
+    expect(sentBody.conf).toBe(0.5);
+    expect(sentBody.mask_padding).toBe(32);
+  });
+
+  it('faces_detected가 없으면 0으로 둔다', async () => {
+    mockFetchOnce(200, { url: '/r/1.png' });
+    const r = await requestAdetailer('a.png');
+    expect(r.faces_detected).toBe(0);
+  });
+
+  it('422면 백엔드의 한국어 detail을 그대로 던진다', async () => {
+    mockFetchOnce(422, { detail: '디노이즈 강도는 0~1 사이여야 해요.' });
+    await expect(requestAdetailer('a.png', { denoising_strength: 2 })).rejects.toThrow(
+      '디노이즈 강도는 0~1 사이여야 해요.'
+    );
+  });
+
+  it('503이면 백엔드의 한국어 detail을 그대로 던진다 (GPU 없음)', async () => {
+    mockFetchOnce(503, { detail: 'GPU를 찾을 수 없습니다.' });
+    await expect(requestAdetailer('a.png')).rejects.toThrow('GPU를 찾을 수 없습니다.');
+  });
+
+  it('503에 detail이 없으면 GPU 안내를 던진다', async () => {
+    mockFetchOnce(503, {});
+    await expect(requestAdetailer('a.png')).rejects.toThrow('GPU가 필요해요');
+  });
+
+  it('네트워크 실패면 한국어 메시지를 던진다', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('boom'));
+    await expect(requestAdetailer('a.png')).rejects.toThrow('백엔드에 연결할 수 없어요');
   });
 });
