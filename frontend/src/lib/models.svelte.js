@@ -66,9 +66,14 @@ export async function removeModel(name) {
   }
 }
 
-/** 체크포인트만 */
+/** 체크포인트만 (단일 파일) */
 export function checkpoints() {
   return (modelStore.data?.models ?? []).filter((m) => m.kind === 'checkpoint');
+}
+
+/** Anima 3.8b 팩 (디렉토리 단위) */
+export function anima38packs() {
+  return (modelStore.data?.models ?? []).filter((m) => m.kind === 'anima38pack');
 }
 
 /** LoRA만 */

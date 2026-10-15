@@ -51,7 +51,12 @@ class GenerateRequest(BaseModel):
 
 def configure(model_path: str, output_dir: str = "outputs") -> None:
     """파이프라인을 설정하고 로드한다."""
-    pipe = Pipeline(model_path=model_path, output_dir=output_dir)
+    from atelier.api.routes import models as models_module
+    if models_module.is_anima38_pack_dir(model_path):
+        from atelier.engine.anima38 import Anima38Pipeline
+        pipe = Anima38Pipeline(pack_dir=model_path, output_dir=output_dir)
+    else:
+        pipe = Pipeline(model_path=model_path, output_dir=output_dir)
     _ensure_loaded(pipe)
     set_pipeline(pipe)
 
@@ -71,9 +76,10 @@ def get_pipeline() -> Pipeline:
         if _pipeline is not None:
             return _pipeline
         model_path = os.environ.get("ATELIER_MODEL_PATH")
+        # 순환 import를 피하려고 함수 안에서 가져온다.
+        from atelier.api.routes import models as models_module
         if not model_path:
             # 저장된 활성 모델이 있으면 우선 사용 (재시작 후에도 유지)
-            from atelier.api.routes import models as models_module
             model_path = models_module.get_saved_active_path()
         if not model_path:
             raise HTTPException(
@@ -83,7 +89,12 @@ def get_pipeline() -> Pipeline:
             )
         # 출력 폴더는 데이터 디렉토리로 고정 (실행 CWD에 따라 흩어지지 않게)
         output_dir = os.path.join(history_module.data_dir(), "outputs")
-        pipe = Pipeline(model_path=model_path, output_dir=output_dir)
+        if models_module.is_anima38_pack_dir(model_path):
+            # Anima 3.8b 팩: 커스텀 DiT 파이프라인
+            from atelier.engine.anima38 import Anima38Pipeline
+            pipe = Anima38Pipeline(pack_dir=model_path, output_dir=output_dir)
+        else:
+            pipe = Pipeline(model_path=model_path, output_dir=output_dir)
         _ensure_loaded(pipe)
         _pipeline = pipe
         return _pipeline

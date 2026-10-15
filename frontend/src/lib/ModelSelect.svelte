@@ -1,9 +1,11 @@
 <script>
   // 퀵 패널용 모델 선택 드롭다운 (체크포인트 전환)
   import { onMount } from 'svelte';
-  import { modelStore, loadModels, activateModel, checkpoints } from './models.svelte.js';
+  import { modelStore, loadModels, activateModel, checkpoints, anima38packs } from './models.svelte.js';
 
   const cps = $derived(checkpoints());
+  const packs = $derived(anima38packs());
+  const allModels = $derived([...cps, ...packs]);
 
   onMount(() => {
     if (!modelStore.data && !modelStore.loading) loadModels();
@@ -21,14 +23,17 @@
   class="select"
   value={modelStore.data?.active ?? ''}
   onchange={onChange}
-  disabled={modelStore.loading || cps.length === 0}
+  disabled={modelStore.loading || allModels.length === 0}
   aria-label="모델 선택"
 >
-  {#if cps.length === 0}
+  {#if allModels.length === 0}
     <option value="">모델 없음</option>
   {/if}
   {#each cps as m (m.name)}
     <option value={m.name}>{m.name}</option>
+  {/each}
+  {#each packs as m (m.name)}
+    <option value={m.name}>{m.name} (3.8b 팩)</option>
   {/each}
 </select>
 {#if modelStore.loading}

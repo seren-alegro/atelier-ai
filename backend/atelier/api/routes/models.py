@@ -59,14 +59,16 @@ def _save_active(name: str | None) -> None:
 
 
 def get_saved_active_path() -> str | None:
-    """저장된 활성 모델의 절대 경로. 파일이 없으면 None."""
+    """저장된 활성 모델의 절대 경로. 파일/팩이 없으면 None."""
     name = _load_saved_active()
     if not name:
         return None
-    try:
-        return _resolve(name)
-    except HTTPException:
-        return None
+    for resolver in (_resolve, _resolve_dir):
+        try:
+            return resolver(name)
+        except HTTPException:
+            continue
+    return None
 
 
 def models_dir() -> str:
@@ -78,13 +80,44 @@ def models_dir() -> str:
 
 
 def _scan() -> list[dict]:
-    """모델 디렉토리를 스캔해 체크포인트/LoRA 목록 반환."""
+    """모델 디렉토리를 스캔해 체크포인트/LoRA/Anima 3.8b 팩 목록 반환."""
+    from atelier.engine.anima38 import looks_like_pack_dir, pack_status
+
     base = models_dir()
     items: list[dict] = []
     if not os.path.isdir(base):
         return items
     for root, dirs, files in os.walk(base):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        # Anima 3.8b 팩 디렉토리: 파일 목록에 넣지 않고 팩 항목으로만 표시
+        if root != base and looks_like_pack_dir(root):
+            rel = os.path.relpath(root, base).replace(os.sep, "/")
+            st = pack_status(root)
+            total = 0
+            newest = 0.0
+            for f in files:
+                if f.startswith("."):
+                    continue
+                fp = os.path.join(root, f)
+                try:
+                    fst = os.stat(fp)
+                except OSError:
+                    continue
+                total += fst.st_size
+                newest = max(newest, fst.st_mtime)
+            items.append(
+                {
+                    "name": rel,
+                    "kind": "anima38pack",
+                    "size_mb": round(total / (1024 * 1024), 1),
+                    "modified": datetime.fromtimestamp(newest).isoformat(
+                        timespec="seconds"
+                    ) if newest else "",
+                    "pack_status": st,
+                }
+            )
+            dirs[:] = []  # 팩 내부는 더 내려가지 않음
+            continue
         for f in sorted(files):
             if f.startswith("."):
                 continue
@@ -134,11 +167,35 @@ def _resolve(name: str) -> str:
     return full
 
 
-# 모듈 로드 시 저장된 활성 모델 복원 (파일이 실제로 있을 때만)
+def _resolve_dir(name: str) -> str:
+    """팩 디렉토리 이름을 절대 경로로 바꾼다. 경로 조작 시 400."""
+    if not name or name.startswith("/") or ".." in name.replace("\\", "/").split("/"):
+        raise HTTPException(status_code=400, detail="잘못된 모델 이름이에요.")
+    base = os.path.realpath(models_dir())
+    full = os.path.realpath(os.path.join(base, name.replace("/", os.sep)))
+    if full != base and not full.startswith(base + os.sep):
+        raise HTTPException(status_code=400, detail="잘못된 모델 이름이에요.")
+    if not os.path.isdir(full):
+        raise HTTPException(
+            status_code=404, detail="모델 팩을 찾을 수 없어요."
+        )
+    return full
+
+
+def is_anima38_pack_dir(path: str) -> bool:
+    """절대 경로가 3.8b 팩 디렉토리인지. generate.py에서 사용."""
+    from atelier.engine.anima38 import is_anima38_pack_dir as _is_pack
+    return _is_pack(path)
+
+
+# 모듈 로드 시 저장된 활성 모델 복원 (파일/팩이 실제로 있을 때만)
 _saved_active = _load_saved_active()
 if _saved_active:
     try:
-        _resolve(_saved_active)
+        try:
+            _resolve(_saved_active)
+        except HTTPException:
+            _resolve_dir(_saved_active)
         _active_name = _saved_active
     except HTTPException:
         pass
@@ -176,14 +233,14 @@ def set_active(req: ActiveRequest):
 
     items = _scan()
     match = next(
-        (m for m in items if m["name"] == req.name and m["kind"] == "checkpoint"),
+        (m for m in items
+         if m["name"] == req.name and m["kind"] in ("checkpoint", "anima38pack")),
         None,
     )
     if match is None:
         raise HTTPException(
             status_code=404, detail="체크포인트를 찾을 수 없어요."
         )
-    path = _resolve(req.name)
 
     try:
         current = generate.get_pipeline()
@@ -191,7 +248,13 @@ def set_active(req: ActiveRequest):
         current = None
     output_dir = getattr(current, "output_dir", "outputs")
 
-    new_pipe = Pipeline(model_path=path, output_dir=output_dir)
+    if match["kind"] == "anima38pack":
+        from atelier.engine.anima38 import Anima38Pipeline
+        path = _resolve_dir(req.name)
+        new_pipe = Anima38Pipeline(pack_dir=path, output_dir=output_dir)
+    else:
+        path = _resolve(req.name)
+        new_pipe = Pipeline(model_path=path, output_dir=output_dir)
     try:
         new_pipe.load()
     except Exception as e:  # noqa: BLE001 - 메시지를 그대로 전달
