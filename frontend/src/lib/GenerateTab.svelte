@@ -3,7 +3,7 @@
   import { store } from './store.svelte.js';
   import { historyStore, loadHistory } from './history.svelte.js';
   import TagInput from './TagInput.svelte';
-  import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestOutpaint, requestXyPlot, getXyPlotJob, cancelXyPlotJob, apiUrl } from './api.js';
+  import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestOutpaint, requestXyPlot, getXyPlotJob, cancelXyPlotJob, requestPngInfo, fetchFavorites, addFavorite, deleteFavorite, fetchNegativePresets, addNegativePreset, deleteNegativePreset, apiUrl } from './api.js';
   import { t } from './i18n.svelte.js';
 
   let { onLoad = null } = $props();
@@ -270,22 +270,262 @@
       batchNotice = e.message || t('gen.batchCancelFail');
     }
   }
+
+  // PNG 메타데이터 불러오기 (이미지 드래그앤드롭 / 파일 선택)
+  let pngFileInput = $state(null);
+  let dropActive = $state(false);
+  let pngNotice = $state('');
+
+  const PNG_KEYS = ['prompt', 'negative_prompt', 'steps', 'cfg_scale', 'sampler', 'seed', 'width', 'height'];
+  const PNG_NUM_KEYS = ['steps', 'cfg_scale', 'seed', 'width', 'height'];
+
+  async function applyPngFile(file) {
+    pngNotice = '';
+    if (!file) return;
+    try {
+      const { found, params } = await requestPngInfo(file);
+      if (!found || !params) {
+        pngNotice = t('gen.loadFromImageFail');
+        return;
+      }
+      for (const k of PNG_KEYS) {
+        const v = params[k];
+        if (v === undefined || v === null) continue;
+        if (PNG_NUM_KEYS.includes(k)) {
+          const n = Number(v);
+          if (!Number.isNaN(n)) store.values[k] = n;
+        } else {
+          store.values[k] = String(v);
+        }
+      }
+      pngNotice = t('gen.loadFromImageOk');
+    } catch (e) {
+      pngNotice = t('gen.loadFromImageFail');
+    }
+  }
+
+  function onPngDrop(e) {
+    const f = e.dataTransfer?.files?.[0];
+    if (f) applyPngFile(f);
+  }
+
+  function onPngPicked(e) {
+    const f = e.target.files?.[0];
+    if (f) applyPngFile(f);
+    e.target.value = ''; // 같은 파일을 다시 고를 수 있게
+  }
+
+  // 프롬프트 즐겨찾기
+  let favs = $state(null); // null = 아직 안 불러옴
+  let favSaveOpen = $state(false);
+  let favName = $state('');
+  let favNotice = $state('');
+
+  async function loadFavs() {
+    favs = (await fetchFavorites()) ?? [];
+  }
+
+  async function onFavSave() {
+    favNotice = '';
+    try {
+      const item = await addFavorite(favName.trim(), (store.values.prompt ?? '').trim());
+      favs = [...(favs ?? []), item];
+      favName = '';
+      favSaveOpen = false;
+      favNotice = t('fav.saved');
+    } catch (e) {
+      favNotice = e.message;
+    }
+  }
+
+  async function onFavDelete(id) {
+    favNotice = '';
+    try {
+      await deleteFavorite(id);
+      favs = (favs ?? []).filter((f) => f.id !== id);
+    } catch (e) {
+      favNotice = e.message;
+    }
+  }
+
+  // 네거티브 프리셋
+  let negPresets = $state(null);
+  let negPresetId = $state('');
+  let negAddOpen = $state(false);
+  let negName = $state('');
+  let negText = $state('');
+  let negNotice = $state('');
+
+  async function loadNegPresets() {
+    negPresets = (await fetchNegativePresets()) ?? [];
+  }
+
+  function onNegPresetApply() {
+    negNotice = '';
+    if (!negPresetId) return;
+    const p = (negPresets ?? []).find((x) => x.id === negPresetId);
+    if (p) store.values.negative_prompt = p.text;
+    negPresetId = ''; // 같은 프리셋을 다시 고를 수 있게
+  }
+
+  async function onNegPresetAdd() {
+    negNotice = '';
+    try {
+      const item = await addNegativePreset(negName.trim(), negText.trim());
+      negPresets = [...(negPresets ?? []), item];
+      negName = '';
+      negText = '';
+      negAddOpen = false;
+      negNotice = t('negpreset.saved');
+    } catch (e) {
+      negNotice = e.message;
+    }
+  }
+
+  async function onNegPresetDelete(id) {
+    negNotice = '';
+    try {
+      await deleteNegativePreset(id);
+      negPresets = (negPresets ?? []).filter((p) => p.id !== id);
+    } catch (e) {
+      negNotice = e.message;
+    }
+  }
 </script>
 
 <div class="generate-tab">
-  <div class="prompt-card">
-    <div class="field-head">
+  <div
+    class="prompt-card"
+    ondragover={(e) => { e.preventDefault(); dropActive = true; }}
+    ondragleave={() => { dropActive = false; }}
+    ondrop={(e) => { e.preventDefault(); dropActive = false; onPngDrop(e); }}
+  >
+    {#if dropActive}
+      <div class="drop-overlay">{t('gen.dropImageHint')}</div>
+    {/if}
+    <div class="field-head fav-head">
       <span class="field-label">{t('gen.promptTitle')}</span>
+      <button
+        class="btn small"
+        onclick={() => { favSaveOpen = !favSaveOpen; favName = ''; favNotice = ''; }}
+        title={t('fav.save')}
+      >
+        {t('fav.save')}
+      </button>
     </div>
+    {#if favSaveOpen}
+      <div class="fav-save-row">
+        <input
+          class="text-input"
+          bind:value={favName}
+          placeholder={t('fav.name')}
+          maxlength="60"
+        />
+        <button
+          class="btn primary small"
+          onclick={onFavSave}
+          disabled={!favName.trim() || !(store.values.prompt ?? '').trim()}
+        >
+          {t('fav.save')}
+        </button>
+      </div>
+    {/if}
+    {#if favNotice}<p class="notice">{favNotice}</p>{/if}
     <TagInput
       bind:value={store.values.prompt}
       placeholder={t('gen.promptPlaceholder')}
     />
 
-    <details class="neg">
+    <details
+      class="neg"
+      ontoggle={(e) => { if (e.newState === 'open') loadNegPresets(); }}
+    >
       <summary class="field-label">{t('gen.negativeTitle')}</summary>
       <div class="neg-body">
+        <div class="negpreset-row">
+          <select
+            class="select negpreset-select"
+            bind:value={negPresetId}
+            onchange={onNegPresetApply}
+            aria-label={t('negpreset.label')}
+          >
+            <option value="">{t('negpreset.label')}</option>
+            {#each negPresets ?? [] as p (p.id)}
+              <option value={p.id}>{p.name}</option>
+            {/each}
+          </select>
+          <button
+            class="btn small"
+            onclick={() => { negAddOpen = !negAddOpen; negName = ''; negText = ''; negNotice = ''; }}
+            title={t('negpreset.add')}
+          >
+            ＋
+          </button>
+        </div>
+        {#if negAddOpen}
+          <div class="fav-save-row">
+            <input
+              class="text-input"
+              bind:value={negName}
+              placeholder={t('fav.name')}
+              maxlength="60"
+            />
+            <input
+              class="text-input"
+              bind:value={negText}
+              placeholder={t('negpreset.custom')}
+            />
+            <button
+              class="btn primary small"
+              onclick={onNegPresetAdd}
+              disabled={!negName.trim() || !negText.trim()}
+            >
+              {t('negpreset.add')}
+            </button>
+          </div>
+        {/if}
+        {#if negNotice}<p class="notice">{negNotice}</p>{/if}
         <TagInput bind:value={store.values.negative_prompt} placeholder={t('gen.negativePlaceholder')} />
+        {#if (negPresets ?? []).some((p) => !p.builtin)}
+          <div class="negpreset-custom">
+            {#each (negPresets ?? []).filter((p) => !p.builtin) as p (p.id)}
+              <span class="negpreset-chip">
+                {p.name}
+                <button class="chip-x" onclick={() => onNegPresetDelete(p.id)} title={t('fav.delete')}>×</button>
+              </span>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </details>
+
+    <details
+      class="batch"
+      ontoggle={(e) => { if (e.newState === 'open') loadFavs(); }}
+    >
+      <summary class="field-label">⭐ {t('fav.title')}</summary>
+      <div class="batch-body">
+        {#if favs === null}
+          <p class="batch-hint">…</p>
+        {:else if favs.length === 0}
+          <p class="batch-hint">{t('fav.empty')}</p>
+        {:else}
+          <ul class="batch-list">
+            {#each favs as f (f.id)}
+              <li class="batch-item">
+                <button
+                  class="fav-load"
+                  onclick={() => { store.values.prompt = f.prompt; }}
+                  title={f.prompt}
+                  aria-label={t('fav.load')}
+                >
+                  {f.name}
+                </button>
+                <button class="btn small" onclick={() => onFavDelete(f.id)} title={t('fav.delete')}>🗑</button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </div>
     </details>
 
@@ -296,8 +536,19 @@
       {#if busy}
         <button class="btn" onclick={() => currentJob?.cancel()}>{t('common.cancel')}</button>
       {/if}
+      <button class="btn" onclick={() => pngFileInput?.click()} disabled={!store.loaded}>
+        {t('gen.loadFromImage')}
+      </button>
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        bind:this={pngFileInput}
+        onchange={onPngPicked}
+      />
     </div>
     {#if notice}<p class="notice">{notice}</p>{/if}
+    {#if pngNotice}<p class="notice">{pngNotice}</p>{/if}
 
     <details class="batch">
       <summary class="field-label">{t('gen.batchTitle')}</summary>
@@ -576,6 +827,89 @@
   .neg summary:hover { color: #cfd2ea; }
   .neg-body { margin-top: 8px; }
   .btn-row { margin-top: 12px; }
+  .btn.small {
+    padding: 6px 12px;
+    font-size: 12.5px;
+    border-radius: 8px;
+  }
+  /* PNG 드래그앤드롭 오버레이 */
+  .prompt-card { position: relative; }
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(20, 22, 43, 0.92);
+    border: 2px dashed #7c6cf0;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cfd2ea;
+    font-size: 15px;
+    font-weight: 600;
+    z-index: 10;
+    pointer-events: none;
+  }
+  /* 즐겨찾기 */
+  .fav-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .fav-save-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+  }
+  .fav-save-row .text-input { flex: 1; min-width: 0; }
+  .fav-load {
+    flex: 1;
+    background: none;
+    border: none;
+    color: #cfd2ea;
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+    font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fav-load:hover { color: #fff; text-decoration: underline; }
+  /* 네거티브 프리셋 */
+  .negpreset-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+  .negpreset-select { flex: 1; min-width: 0; }
+  .negpreset-custom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .negpreset-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #23264a;
+    border-radius: 999px;
+    padding: 4px 6px 4px 12px;
+    font-size: 12.5px;
+    color: #cfd2ea;
+  }
+  .chip-x {
+    background: none;
+    border: none;
+    color: #8a8db0;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 999px;
+  }
+  .chip-x:hover { color: #ff9aa8; background: rgba(255, 255, 255, 0.06); }
   .cta {
     font-size: 16px;
     padding: 13px 40px;

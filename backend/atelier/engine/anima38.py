@@ -1022,7 +1022,9 @@ class Anima38Pipeline:
             latents = scheduler.step(noise_pred, t, latents).prev_sample
 
         images = self._decode(latents)
-        return self._save(images, seed, "anima38-txt2img")
+        from atelier.pngmeta import build_meta_from_kwargs, build_pnginfo
+        meta = build_meta_from_kwargs(kwargs, seed, sampler_name)
+        return self._save(images, seed, "anima38-txt2img", meta)
 
     def _unpatchify(self, tokens, lat_h: int, lat_w: int):
         """토큰 시퀀스 → latent 이미지 (x_embedder 역연산, 구조 추정)."""
@@ -1049,9 +1051,12 @@ class Anima38Pipeline:
                 ).round().astype(np.uint8)
         return [Image.fromarray(imgs[i]) for i in range(imgs.shape[0])]
 
-    def _save(self, images, seed: int, tag: str) -> list[str]:
+    def _save(self, images, seed: int, tag: str,
+              meta: dict | None = None) -> list[str]:
         import uuid
         from datetime import datetime
+
+        from atelier.pngmeta import build_pnginfo
 
         os.makedirs(self.output_dir, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1060,7 +1065,10 @@ class Anima38Pipeline:
         for i, img in enumerate(images):
             path = os.path.join(
                 self.output_dir, f"{stamp}-{tag}-s{seed}-{i}-{uniq}.png")
-            img.save(path)
+            if meta:
+                img.save(path, pnginfo=build_pnginfo(meta))
+            else:
+                img.save(path)
             paths.append(path)
         return paths
 

@@ -18,6 +18,7 @@ import uuid
 from datetime import datetime
 
 from atelier.engine.samplers import apply_scheduler
+from atelier.pngmeta import build_meta_from_kwargs, build_pnginfo
 from atelier.settings import defaults, validate
 
 # settings.py에 strength 항목이 생기기 전까지 쓰는 기본값. 실측 후 조정.
@@ -211,7 +212,9 @@ class Pipeline:
         pipe, kwargs, seed = self._prepare(params, "sampler")
         self._apply_loras(pipe, loras)
         images = pipe(**kwargs).images
-        return self._save(images, seed, "txt2img")
+        sampler_name = params.get("sampler", defaults()["sampler"])
+        meta = build_meta_from_kwargs(kwargs, seed, sampler_name)
+        return self._save(images, seed, "txt2img", meta)
 
     def img2img(self, params: dict, image: str,
                 loras: dict | None = None) -> list[str]:
@@ -229,7 +232,9 @@ class Pipeline:
         self._apply_loras(i2i, loras)
         images = i2i(image=Image.open(image).convert("RGB"),
                       strength=strength, **kwargs).images
-        return self._save(images, seed, "img2img")
+        sampler_name = p.get("sampler", defaults()["sampler"])
+        meta = build_meta_from_kwargs(kwargs, seed, sampler_name)
+        return self._save(images, seed, "img2img", meta)
 
     def inpaint(self, params: dict, image: str, mask: str,
                 loras: dict | None = None) -> list[str]:
@@ -249,7 +254,9 @@ class Pipeline:
         images = inp(image=Image.open(image).convert("RGB"),
                       mask_image=Image.open(mask).convert("RGB"),
                       strength=strength, **kwargs).images
-        return self._save(images, seed, "inpaint")
+        sampler_name = p.get("sampler", defaults()["sampler"])
+        meta = build_meta_from_kwargs(kwargs, seed, sampler_name)
+        return self._save(images, seed, "inpaint", meta)
 
     def pose(self, params: dict, control_image: str,
              loras: dict | None = None) -> list[str]:
@@ -296,11 +303,13 @@ class Pipeline:
         images = pipe(image=Image.open(control_image).convert("RGB"),
                       controlnet_conditioning_scale=strength,
                       **kwargs).images
-        return self._save(images, seed, "pose")
+        meta = build_meta_from_kwargs(kwargs, seed, sampler_name)
+        return self._save(images, seed, "pose", meta)
 
     # -- 저장 ----------------------------------------------------------
 
-    def _save(self, images, seed: int, tag: str) -> list[str]:
+    def _save(self, images, seed: int, tag: str,
+              meta: dict | None = None) -> list[str]:
         os.makedirs(self.output_dir, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         uniq = uuid.uuid4().hex[:6]  # 같은 초·같은 seed여도 충돌 방지
@@ -308,6 +317,9 @@ class Pipeline:
         for i, img in enumerate(images):
             path = os.path.join(
                 self.output_dir, f"{stamp}-{tag}-s{seed}-{i}-{uniq}.png")
-            img.save(path)
+            if meta:
+                img.save(path, pnginfo=build_pnginfo(meta))
+            else:
+                img.save(path)
             paths.append(path)
         return paths

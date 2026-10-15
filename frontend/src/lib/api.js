@@ -548,3 +548,88 @@ export async function requestCaptionBatch(datasetDir, method = 'wd14', overwrite
   if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
   return data;
 }
+
+/** POST /api/png-info — PNG에서 생성 설정 읽기. {found, params} 반환. */
+export async function requestPngInfo(file) {
+  const form = new FormData();
+  form.append('file', file);
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/png-info', { method: 'POST', body: form });
+  } catch {
+    throw new Error(t('api.connectFail'));
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+/** GET /api/prompt-favorites — 실패 시 null */
+export async function fetchFavorites() {
+  try {
+    const data = await getJson('/api/prompt-favorites');
+    return Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/prompt-favorites — 즐겨찾기 추가 */
+export async function addFavorite(name, prompt) {
+  const res = await fetch(API_BASE + '/api/prompt-favorites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, prompt }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+/** DELETE /api/prompt-favorites/{id} — 즐겨찾기 삭제 */
+export async function deleteFavorite(id) {
+  const res = await fetch(
+    API_BASE + '/api/prompt-favorites/' + encodeURIComponent(id),
+    { method: 'DELETE' }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || t('api.deleteFail'));
+  }
+  return await res.json();
+}
+
+/** GET /api/negative-presets — 내장+사용자 프리셋. 실패 시 null */
+export async function fetchNegativePresets() {
+  try {
+    const data = await getJson('/api/negative-presets');
+    return Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/negative-presets — 사용자 프리셋 추가 */
+export async function addNegativePreset(name, text) {
+  const res = await fetch(API_BASE + '/api/negative-presets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, text }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+/** DELETE /api/negative-presets/{id} — 사용자 프리셋 삭제 */
+export async function deleteNegativePreset(id) {
+  const res = await fetch(
+    API_BASE + '/api/negative-presets/' + encodeURIComponent(id),
+    { method: 'DELETE' }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || t('api.deleteFail'));
+  }
+  return await res.json();
+}
