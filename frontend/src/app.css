@@ -154,6 +154,34 @@ html, body { height: 100%; }
   white-space: nowrap;
 }
 
+/* 헤더 언어 전환 (한/EN/日) */
+.lang-switch {
+  display: flex;
+  gap: 2px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+}
+.lang-switch button {
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.lang-switch button:hover {
+  color: var(--text);
+}
+.lang-switch button.active {
+  background: var(--accent, #8b7cf6);
+  color: #fff;
+}
+
 /* 작업 공간: 가운데 + 오른쪽 퀵 패널 */
 .workspace {
   flex: 1;

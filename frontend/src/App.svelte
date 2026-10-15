@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { t, getLang } from './lib/i18n.svelte.js';
+  import { t, getLang, setLang, LANGS } from './lib/i18n.svelte.js';
   import { store, initStore, reconnect, checkBackendAlive } from './lib/store.svelte.js';
   import SideNav from './lib/SideNav.svelte';
   import QuickPanel from './lib/QuickPanel.svelte';
@@ -69,6 +69,15 @@
         <img class="brand-logo" src="logo.png" alt={t('app.logoAlt')} />
         <h1>Atelier AI</h1>
         <span class="tagline">{t('app.tagline')}</span>
+        <div class="lang-switch" role="group" aria-label={t('set.langTitle')}>
+          {#each LANGS as l (l.id)}
+            <button
+              class:active={getLang() === l.id}
+              onclick={() => setLang(l.id)}
+              title={l.label}
+            >{l.id === 'ko' ? '한' : l.id === 'ja' ? '日' : 'EN'}</button>
+          {/each}
+        </div>
       </div>
       <button
         class="api-badge"
