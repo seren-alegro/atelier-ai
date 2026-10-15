@@ -104,6 +104,33 @@ SETTINGS: list[Setting] = [
         max=1.0,
     ),
     Setting(
+        key="hires_fix_enabled",
+        label="Hires Fix 사용",
+        description="생성 후 고해상도 보정을 켜요. 작은 해상도로 먼저 뽑고 "
+                    "키운 뒤 살짝만 다시 그려서 디테일을 살려요. "
+                    "시간이 약 2배 걸리지만 얼굴·손 같은 잔붕괴가 줄어요.",
+        recommended=False,
+        kind="toggle",
+    ),
+    Setting(
+        key="hires_fix_scale",
+        label="Hires Fix 배율",
+        description="Hires Fix에서 몇 배로 키울지 정해요. "
+                    "2.0이면 가로·세로가 각각 2배가 돼요.",
+        recommended=2.0,
+        min=1.25,
+        max=3.0,
+    ),
+    Setting(
+        key="hires_fix_denoise",
+        label="Hires Fix 디노이즈",
+        description="Hires Fix 2단계에서 얼마나 다시 그릴지 정해요. "
+                    "높을수록 원본 구도에서 멀어지고, 낮을수록 원본을 유지해요.",
+        recommended=0.35,
+        min=0.1,
+        max=0.7,
+    ),
+    Setting(
         key="batch_size",
         label="한 번에 뽑는 장수",
         description="한 번에 몇 장을 뽑을지 정해요. 많을수록 VRAM을 많이 써요.",

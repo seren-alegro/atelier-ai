@@ -156,6 +156,11 @@ def _run_job_sync(
         _ensure_loaded(pipe)
         if mode == "txt2img":
             paths = pipe.txt2img(params, loras)
+            if params.get("hires_fix_enabled"):
+                # Hires Fix: Lanczos 확대 → img2img로 살짝 다시 그리기
+                from atelier.engine import hiresfix as hiresfix_engine
+                paths = hiresfix_engine.apply_hires_fix(
+                    pipe, params, loras, paths)
         elif mode == "img2img":
             paths = pipe.img2img(params, image_path, loras)
         elif mode == "pose":

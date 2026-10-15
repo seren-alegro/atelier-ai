@@ -53,14 +53,24 @@
     return store.values.loras[name];
   }
 
-  // 업스케일 강도 슬라이더 (해상도 아래). QuickSlider용 설정 디스크립터.
-  const upscaleSetting = {
-    key: 'upscale_strength',
-    label: '업스케일 강도',
-    min: 0.5,
-    max: 1.0,
-    recommended: 0.5,
+  // Hires Fix 섹션 (고급 영역). QuickSlider용 설정 디스크립터.
+  const hiresFixScaleSetting = {
+    key: 'hires_fix_scale',
+    label: 'Hires Fix 배율',
+    min: 1.25,
+    max: 3.0,
+    recommended: 2.0,
   };
+  const hiresFixDenoiseSetting = {
+    key: 'hires_fix_denoise',
+    label: 'Hires Fix 디노이즈',
+    min: 0.1,
+    max: 0.7,
+    recommended: 0.35,
+  };
+  const HIRES_FIX_KEYS = new Set([
+    'hires_fix_enabled', 'hires_fix_scale', 'hires_fix_denoise',
+  ]);
 
   onMount(() => {
     if (!modelStore.data && !modelStore.loading) loadModels();
@@ -127,6 +137,17 @@
 <details class="qp-section qp-details">
   <summary class="qp-title">⚙ 고급 설정</summary>
   <div class="qp-advanced">
+    <div class="qp-sub">✨ Hires Fix</div>
+    <label class="qp-lora-toggle">
+      <input type="checkbox" bind:checked={store.values.hires_fix_enabled} />
+      <span>고해상도 보정 사용</span>
+    </label>
+    <p class="hint">
+      작은 해상도로 먼저 뽑고 키운 뒤 살짝만 다시 그려요.
+      시간이 약 2배 걸리지만 잔붕괴가 줄어요.
+    </p>
+    <QuickSlider setting={hiresFixScaleSetting} />
+    <QuickSlider setting={hiresFixDenoiseSetting} />
     <div class="qp-sub">🎲 샘플링 방법</div>
     <select class="select" bind:value={store.values.sampler} aria-label="샘플링 방법">
       <optgroup label="일반">
@@ -146,7 +167,7 @@
     {#if stepsMeta}
       <QuickSlider setting={stepsMeta} />
     {/if}
-    {#each advancedSettings.filter((s) => !['sampler', 'cfg_scale', 'steps'].includes(s.key)) as setting (setting.key)}
+    {#each advancedSettings.filter((s) => !['sampler', 'cfg_scale', 'steps', ...HIRES_FIX_KEYS].includes(s.key)) as setting (setting.key)}
       <SettingField {setting} bind:value={store.values[setting.key]} />
     {/each}
   </div>

@@ -3,7 +3,7 @@
   import { store } from './store.svelte.js';
   import { historyStore, loadHistory } from './history.svelte.js';
   import TagInput from './TagInput.svelte';
-  import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, apiUrl } from './api.js';
+  import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestOutpaint, requestXyPlot, getXyPlotJob, cancelXyPlotJob, apiUrl } from './api.js';
 
   let { onLoad = null } = $props();
 
@@ -14,6 +14,9 @@
   let recentLoaded = $state(false);
   let upscaling = $state({}); // src → true (업스케일 진행 중인 이미지)
   let retouching = $state({}); // src → true (얼굴 보정 진행 중인 이미지)
+  let outpainting = $state({}); // src → true (아웃페인팅 진행 중인 이미지)
+  let outpaintForm = $state(null); // 폼이 열린 이미지 src (없으면 null)
+  let outpaintExpand = $state({ up: 256, down: 256, left: 256, right: 256 });
 
   // 배치 생성 큐
   let batchText = $state('');
@@ -31,6 +34,111 @@
     error: '실패', cancelled: '취소됨',
   };
 
+  // X/Y 플롯
+  const XY_TYPES = [
+    { value: 'sampler', label: '샘플러' },
+    { value: 'cfg_scale', label: 'CFG 스케일' },
+    { value: 'steps', label: '스텝 수' },
+    { value: 'seed', label: '시드' },
+  ];
+  let xyXType = $state('cfg_scale');
+  let xyXValues = $state('3, 5, 7');
+  let xyYType = $state('steps');
+  let xyYValues = $state('20, 30');
+  let xyUseY = $state(false);
+  let xyJob = $state(null); // {job_id, status, total, done, items, meta}
+  let xyBusy = $state(false);
+  let xyNotice = $state('');
+  let xyTimer = null;
+  let xyAdded = 0;
+
+  function parseXyValues(text, type) {
+    return text.split(',').map((s) => s.trim()).filter((s) => s !== '')
+      .map((s) => (type === 'sampler' ? s : Number(s)));
+  }
+
+  async function onXyStart() {
+    const xAxis = { type: xyXType, values: parseXyValues(xyXValues, xyXType) };
+    const yAxis = xyUseY ? { type: xyYType, values: parseXyValues(xyYValues, xyYType) } : null;
+    if (xAxis.values.length === 0 || (xyUseY && yAxis.values.length === 0)) {
+      xyNotice = '축 값을 쉼표로 구분해 하나 이상 입력해주세요.';
+      return;
+    }
+    if (xAxis.values.some((v) => typeof v === 'number' && Number.isNaN(v))
+        || (xyUseY && yAxis.values.some((v) => typeof v === 'number' && Number.isNaN(v)))) {
+      xyNotice = '숫자 축에는 숫자만 입력해주세요.';
+      return;
+    }
+    xyNotice = '';
+    xyBusy = true;
+    xyAdded = 0;
+    xyJob = null;
+    try {
+      const { job_id } = await requestXyPlot(xAxis, yAxis, { ...store.values }, 'fixed');
+      const poll = async () => {
+        try {
+          const job = await getXyPlotJob(job_id);
+          xyJob = job;
+          // 새로 끝난 항목을 갤러리에 순서대로 추가
+          while (xyAdded < job.items.length && job.items[xyAdded].status === 'done'
+                 && job.items[xyAdded].url) {
+            results = [...results, apiUrl(job.items[xyAdded].url)];
+            xyAdded += 1;
+          }
+          if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+            xyBusy = false;
+            xyTimer = null;
+            return;
+          }
+        } catch (e) {
+          xyNotice = e.message || 'X/Y 플롯 상태를 확인할 수 없어요.';
+          xyBusy = false;
+          xyTimer = null;
+          return;
+        }
+        xyTimer = setTimeout(poll, 2000);
+      };
+      poll();
+    } catch (e) {
+      xyNotice = e.message || 'X/Y 플롯 시작 중 오류가 발생했어요.';
+      xyBusy = false;
+    }
+  }
+
+  async function onXyCancel() {
+    if (!xyJob) return;
+    try {
+      xyJob = await cancelXyPlotJob(xyJob.job_id);
+    } catch (e) {
+      xyNotice = e.message || 'X/Y 플롯 취소 중 오류가 발생했어요.';
+    }
+  }
+
+  // X/Y 플롯 그리드용 셀 (row-major: y 바깥, x 안쪽)
+  function xyCell(job, yi, xi) {
+    const nx = job.meta?.x_labels?.length ?? 0;
+    return job.items[yi * nx + xi];
+  }
+
+  async function onOutpaint(src) {
+    if (outpainting[src]) return;
+    notice = '';
+    outpainting[src] = true;
+    try {
+      const name = src.split('/').pop();
+      const url = await requestOutpaint(name, {
+        expand: { ...outpaintExpand },
+        prompt: store.values.prompt ?? '',
+        negative_prompt: store.values.negative_prompt ?? '',
+      });
+      results = [...results, url];
+      outpaintForm = null;
+    } catch (e) {
+      notice = e.message || '아웃페인팅 중 오류가 발생했어요.';
+    } finally {
+      delete outpainting[src];
+    }
+  }
   const recents = $derived(
     (historyStore.items ?? [])
       .filter((r) => r.results && r.results.length > 0)
@@ -245,6 +353,111 @@
         {/if}
       </div>
     </details>
+
+    <details class="batch">
+      <summary class="field-label">📊 X/Y 플롯 (설정 비교 그리드)</summary>
+      <div class="batch-body">
+        <div class="xy-row">
+          <label class="xy-axis">
+            <span class="xy-label">X축</span>
+            <select class="select" bind:value={xyXType} disabled={xyBusy}>
+              {#each XY_TYPES as t (t.value)}
+                <option value={t.value}>{t.label}</option>
+              {/each}
+            </select>
+            <input
+              class="text-input"
+              bind:value={xyXValues}
+              placeholder="쉼표로 구분 (예: 3, 5, 7)"
+              disabled={xyBusy}
+              aria-label="X축 값"
+            />
+          </label>
+        </div>
+        <div class="xy-row">
+          <label class="xy-check">
+            <input type="checkbox" bind:checked={xyUseY} disabled={xyBusy} />
+            <span>Y축 사용</span>
+          </label>
+          {#if xyUseY}
+            <label class="xy-axis">
+              <span class="xy-label">Y축</span>
+              <select class="select" bind:value={xyYType} disabled={xyBusy}>
+                {#each XY_TYPES as t (t.value)}
+                  <option value={t.value}>{t.label}</option>
+                {/each}
+              </select>
+              <input
+                class="text-input"
+                bind:value={xyYValues}
+                placeholder="쉼표로 구분 (예: 20, 30)"
+                disabled={xyBusy}
+                aria-label="Y축 값"
+              />
+            </label>
+          {/if}
+        </div>
+        <p class="batch-hint">
+          한 번에 최대 36칸까지. 시드는 기본으로 모든 칸에 고정돼서 공정하게 비교돼요
+          (우측 패널 시드 사용, 랜덤이면 하나 뽑아 공유).
+        </p>
+        <div class="btn-row">
+          <button
+            class="btn primary"
+            onclick={onXyStart}
+            disabled={xyBusy || busy || batchBusy || !store.loaded}
+          >
+            {xyBusy ? 'X/Y 플롯 실행 중…' : '📊 X/Y 플롯 시작'}
+          </button>
+          {#if xyBusy}
+            <button class="btn" onclick={onXyCancel}>취소</button>
+          {/if}
+        </div>
+        {#if xyNotice}<p class="notice">{xyNotice}</p>{/if}
+        {#if xyJob}
+          <p class="batch-status">
+            {xyJob.done} / {xyJob.total} —
+            {batchStatusLabel[xyJob.status] ?? xyJob.status}
+          </p>
+          <div class="xy-grid-wrap">
+            <table class="xy-grid">
+              <thead>
+                <tr>
+                  <th></th>
+                  {#each xyJob.meta?.x_labels ?? [] as xl}
+                    <th>{xl}</th>
+                  {/each}
+                </tr>
+              </thead>
+              <tbody>
+                {#each xyJob.meta?.y_labels?.length ? xyJob.meta.y_labels : [''] as yl, yi}
+                  <tr>
+                    <th>{yl}</th>
+                    {#each xyJob.meta?.x_labels ?? [] as _, xi}
+                      {@const cell = xyCell(xyJob, yi, xi)}
+                      <td>
+                        {#if cell?.status === 'done' && cell.url}
+                          <button
+                            class="xy-cell"
+                            onclick={() => { results = [...results, apiUrl(cell.url)]; }}
+                            title={cell.label ?? ''}
+                          >
+                            <img src={apiUrl(cell.url)} alt={cell.label ?? '플롯 결과'} loading="lazy" />
+                          </button>
+                        {:else}
+                          <span class="xy-cell-status">{batchStatusLabel[cell?.status] ?? '…'}</span>
+                        {/if}
+                      </td>
+                    {/each}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          <p class="batch-hint">칸을 누르면 갤러리에 크게 추가돼요.</p>
+        {/if}
+      </div>
+    </details>
   </div>
 
   <div class="canvas" class:has-results={results.length > 0}>
@@ -289,6 +502,40 @@
             >
               {retouching[src] ? '보정 중…' : '✨ 얼굴 보정'}
             </button>
+            <button
+              class="btn outpaint-btn"
+              onclick={() => { outpaintForm = outpaintForm === src ? null : src; }}
+              disabled={!!outpainting[src]}
+              title="캔버스를 넓히고 새 영역을 AI로 채우기"
+            >
+              {outpainting[src] ? '확장 중…' : '🖼️ 확장'}
+            </button>
+            {#if outpaintForm === src}
+              <div class="outpaint-form">
+                {#each [['up', '위'], ['down', '아래'], ['left', '왼쪽'], ['right', '오른쪽']] as [k, label]}
+                  <label class="outpaint-field">
+                    <span>{label}</span>
+                    <input
+                      type="number"
+                      class="number-box"
+                      min="64"
+                      max="512"
+                      step="64"
+                      bind:value={outpaintExpand[k]}
+                      aria-label="확장 {label} (px)"
+                    />
+                  </label>
+                {/each}
+                <p class="hint">각 방향 64~512px. 새 영역만 다시 그려요.</p>
+                <button
+                  class="btn primary"
+                  onclick={() => onOutpaint(src)}
+                  disabled={!!outpainting[src]}
+                >
+                  확장 시작
+                </button>
+              </div>
+            {/if}
           </figure>
         {/each}
       </div>
@@ -515,4 +762,67 @@
     flex-shrink: 0;
   }
   .batch-item-error { color: #e08090; flex-shrink: 0; }
+  .xy-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .xy-axis {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex: 1;
+    min-width: 220px;
+  }
+  .xy-label { color: #cfd2ea; font-size: 13px; white-space: nowrap; }
+  .xy-check {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    color: #cfd2ea;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .xy-grid-wrap { overflow-x: auto; margin-top: 10px; }
+  .xy-grid { border-collapse: collapse; }
+  .xy-grid th, .xy-grid td {
+    padding: 4px;
+    font-size: 12px;
+    color: #cfd2ea;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .xy-cell {
+    padding: 0;
+    border: 1px solid #3a3d63;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    background: none;
+  }
+  .xy-cell img {
+    display: block;
+    width: 128px;
+    height: 128px;
+    object-fit: cover;
+  }
+  .xy-cell-status { color: #8a8db0; font-size: 12px; }
+  .outpaint-form {
+    margin-top: 8px;
+    padding: 10px;
+    background: #23264a;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .outpaint-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #cfd2ea;
+    font-size: 13px;
+  }
 </style>

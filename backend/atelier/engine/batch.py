@@ -37,7 +37,14 @@ class BatchBusyError(RuntimeError):
 
 
 class BatchJob:
-    """배치 생성 작업. 별도 스레드에서 순차 실행되며 상태를 기록한다."""
+    """배치 생성 작업. 별도 스레드에서 순차 실행되며 상태를 기록한다.
+
+    item_params: 항목별 파라미터 오버라이드 (X/Y 플롯용). None이면
+        기존처럼 params 공유. item_labels: 항목별 표시 라벨.
+    seed_rule: "increment" (기본, 고정 시드면 항목마다 +1) 또는
+        "fixed" (모든 항목에 같은 시드 — X/Y 플롯 비교용).
+    meta: to_dict에 그대로 실리는 부가 정보 (X/Y 플롯 축 정보 등).
+    """
 
     def __init__(
         self,
@@ -45,18 +52,32 @@ class BatchJob:
         prompts: list[str],
         params: dict,
         loras: dict | None,
+        item_params: list[dict] | None = None,
+        item_labels: list[str] | None = None,
+        seed_rule: str = "increment",
+        meta: dict | None = None,
     ):
         self.job_id = job_id
         self.prompts = prompts
         self.params = params
         self.loras = loras
+        self.item_params = item_params
+        self.seed_rule = seed_rule
+        self.meta = meta or {}
         self.status = "queued"  # queued/running/done/cancelled/error
         self.created_at = time.time()
         self.cancel_requested = False
         self.error: str | None = None
         self.items = [
-            {"prompt": p, "status": "queued", "url": None, "error": None}
-            for p in prompts
+            {
+                "prompt": p,
+                "status": "queued",
+                "url": None,
+                "error": None,
+                "label": (item_labels[i] if item_labels and i < len(item_labels)
+                          else None),
+            }
+            for i, p in enumerate(prompts)
         ]
 
     @property
@@ -74,8 +95,15 @@ class BatchJob:
             "done": self.done_count,
             "created_at": self.created_at,
             "error": self.error,
+            "seed_rule": self.seed_rule,
+            "meta": dict(self.meta),
             "items": [dict(i) for i in self.items],
         }
+
+
+def _is_fixed_seed(seed) -> bool:
+    # bool은 int의 서브클래스라 제외 (True == 1 오판 방지)
+    return isinstance(seed, int) and not isinstance(seed, bool) and seed >= 0
 
 
 def _run_batch_sync(job: BatchJob, pipe) -> None:
@@ -85,10 +113,13 @@ def _run_batch_sync(job: BatchJob, pipe) -> None:
 
     job.status = "running"
     seed = job.params.get("seed")
-    # bool은 int의 서브클래스라 제외 (True == 1 오판 방지)
-    fixed_seed = (
-        isinstance(seed, int) and not isinstance(seed, bool) and seed >= 0
-    )
+    fixed_seed = _is_fixed_seed(seed)
+    # seed_rule=fixed: 모든 항목에 같은 시드 (X/Y 플롯 비교용).
+    # 랜덤이면 여기서 하나 뽑아 공유한다.
+    shared_seed = None
+    if job.seed_rule == "fixed":
+        shared_seed = (seed if fixed_seed
+                       else int.from_bytes(os.urandom(4), "big"))
     try:
         for idx, item in enumerate(job.items):
             if job.cancel_requested:
@@ -100,7 +131,16 @@ def _run_batch_sync(job: BatchJob, pipe) -> None:
             try:
                 p = dict(job.params)
                 p["prompt"] = item["prompt"]
-                if fixed_seed:
+                overrides = (job.item_params[idx]
+                             if job.item_params and idx < len(job.item_params)
+                             else None)
+                if overrides:
+                    p.update(overrides)
+                if job.seed_rule == "fixed":
+                    # 축에서 시드를 직접 지정했으면 그 값을 우선
+                    if not (overrides and "seed" in overrides):
+                        p["seed"] = shared_seed
+                elif fixed_seed:
                     # 시드 고정 시 전부 같은 그림이 나오지 않게 항목마다 증가
                     p["seed"] = seed + idx
                 paths = pipe.txt2img(p, job.loras)
@@ -132,12 +172,18 @@ def start_job(
     params: dict,
     loras: dict | None,
     pipe,
+    item_params: list[dict] | None = None,
+    item_labels: list[str] | None = None,
+    seed_rule: str = "increment",
+    meta: dict | None = None,
 ) -> BatchJob:
     """배치 작업을 시작한다. 실행 중인 배치가 있으면 BatchBusyError."""
     if not _batch_run_lock.acquire(blocking=False):
         raise BatchBusyError("다른 배치 작업이 실행 중이에요.")
     _prune_old_jobs()
-    job = BatchJob(uuid.uuid4().hex, prompts, params, loras)
+    job = BatchJob(uuid.uuid4().hex, prompts, params, loras,
+                   item_params=item_params, item_labels=item_labels,
+                   seed_rule=seed_rule, meta=meta)
     _jobs[job.job_id] = job
     thread = threading.Thread(
         target=_run_batch_sync,

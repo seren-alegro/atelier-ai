@@ -12,6 +12,8 @@ from atelier.api.routes.train import router as train_router
 from atelier.api.routes.upscale import router as upscale_router
 from atelier.api.routes.adetailer import router as adetailer_router
 from atelier.api.routes.batch import router as batch_router
+from atelier.api.routes.xyplot import router as xyplot_router
+from atelier.api.routes.outpaint import router as outpaint_router
 from atelier.settings import SETTINGS, defaults
 
 
@@ -36,6 +38,8 @@ def create_app() -> FastAPI:
     app.include_router(upscale_router)
     app.include_router(adetailer_router)
     app.include_router(batch_router)
+    app.include_router(xyplot_router)
+    app.include_router(outpaint_router)
 
     @app.get("/api/settings")
     def list_settings():

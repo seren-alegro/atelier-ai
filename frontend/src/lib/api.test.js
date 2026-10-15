@@ -1,6 +1,6 @@
 // api.js 테스트 — fetch를 모킹해 요청 body 구성과 에러 메시지 변환을 검증.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { requestGenerate, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob } from './api.js';
+import { requestGenerate, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestXyPlot, getXyPlotJob, cancelXyPlotJob, requestOutpaint } from './api.js';
 
 const API = 'http://127.0.0.1:8079';
 
@@ -226,5 +226,122 @@ describe('getBatchJob / cancelBatchJob', () => {
     const [url, opts] = globalThis.fetch.mock.calls[0];
     expect(url).toBe(API + '/api/batch/b1');
     expect(opts.method).toBe('DELETE');
+  });
+});
+
+describe('requestXyPlot', () => {
+  it('축·base_params·seed_rule을 올바른 body로 보낸다', async () => {
+    mockFetchOnce(202, { job_id: 'x1', status: 'queued' });
+    const r = await requestXyPlot(
+      { type: 'cfg_scale', values: [3, 5] },
+      { type: 'steps', values: [20, 30] },
+      {
+        prompt: '1girl',
+        loras: { 'lora/a.safetensors': { enabled: true, strength: 0.8 } },
+        upscale_strength: 0.7,
+      },
+      'fixed'
+    );
+    expect(r.job_id).toBe('x1');
+    const sentBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(sentBody.x_axis).toEqual({ type: 'cfg_scale', values: [3, 5] });
+    expect(sentBody.y_axis).toEqual({ type: 'steps', values: [20, 30] });
+    expect(sentBody.seed_rule).toBe('fixed');
+    expect(sentBody.base_params.prompt).toBe('1girl');
+    expect(sentBody.base_params.loras).toBeUndefined();
+    expect(sentBody.base_params.upscale_strength).toBeUndefined();
+    expect(sentBody.loras).toEqual({
+      'lora/a.safetensors': { enabled: true, strength: 0.8 },
+    });
+  });
+
+  it('y축 없이도 보낼 수 있다', async () => {
+    mockFetchOnce(202, { job_id: 'x2', status: 'queued' });
+    await requestXyPlot({ type: 'seed', values: [1, 2] }, null, { prompt: '1girl' });
+    const sentBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(sentBody.y_axis).toBeNull();
+  });
+
+  it('422면 백엔드의 한국어 detail을 그대로 던진다', async () => {
+    mockFetchOnce(422, { detail: '한 번에 36칸까지만 가능해요.' });
+    await expect(
+      requestXyPlot({ type: 'seed', values: [1] }, null, {})
+    ).rejects.toThrow('한 번에 36칸까지만 가능해요.');
+  });
+
+  it('409면 다른 배치 실행 중 메시지를 던진다', async () => {
+    mockFetchOnce(409, { detail: '다른 배치 작업이 실행 중이에요.' });
+    await expect(
+      requestXyPlot({ type: 'seed', values: [1] }, null, {})
+    ).rejects.toThrow('다른 배치 작업이 실행 중이에요.');
+  });
+
+  it('job_id가 없으면 에러를 던진다', async () => {
+    mockFetchOnce(202, {});
+    await expect(
+      requestXyPlot({ type: 'seed', values: [1] }, null, {})
+    ).rejects.toThrow('X/Y 플롯 작업 ID를 받지 못했어요.');
+  });
+});
+
+describe('getXyPlotJob / cancelXyPlotJob', () => {
+  it('상태를 조회한다', async () => {
+    const body = { job_id: 'x1', status: 'running', total: 4, done: 1, items: [] };
+    mockFetchOnce(200, body);
+    const r = await getXyPlotJob('x1');
+    expect(r).toEqual(body);
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(API + '/api/xy-plot/x1');
+  });
+
+  it('없는 작업이면 404 메시지를 던진다', async () => {
+    mockFetchOnce(404, { detail: 'X/Y 플롯 작업을 찾을 수 없어요.' });
+    await expect(getXyPlotJob('nope')).rejects.toThrow('X/Y 플롯 작업을 찾을 수 없어요.');
+  });
+
+  it('취소는 DELETE로 요청한다', async () => {
+    mockFetchOnce(200, { job_id: 'x1', status: 'cancelled' });
+    const r = await cancelXyPlotJob('x1');
+    expect(r.status).toBe('cancelled');
+    const [url, opts] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(API + '/api/xy-plot/x1');
+    expect(opts.method).toBe('DELETE');
+  });
+});
+
+describe('requestOutpaint', () => {
+  it('expand·옵션을 올바른 body로 보낸다', async () => {
+    mockFetchOnce(200, { url: '/api/results/out.png' });
+    const url = await requestOutpaint('orig.png', {
+      expand: { up: 64, down: 64, left: 128, right: 128 },
+      prompt: 'night sky',
+      denoise_strength: 0.6,
+      mask_blur: 8,
+    });
+    expect(url).toBe(API + '/api/results/out.png');
+    const sentBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(sentBody.image).toBe('orig.png');
+    expect(sentBody.expand).toEqual({ up: 64, down: 64, left: 128, right: 128 });
+    expect(sentBody.denoise_strength).toBe(0.6);
+    expect(sentBody.mask_blur).toBe(8);
+  });
+
+  it('422면 백엔드의 한국어 detail을 그대로 던진다', async () => {
+    mockFetchOnce(422, { detail: '확장 값은 64~512px 사이여야 해요.' });
+    await expect(requestOutpaint('a.png', {})).rejects.toThrow('확장 값은 64~512px 사이여야 해요.');
+  });
+
+  it('503이면 GPU 필요 메시지를 던진다', async () => {
+    mockFetchOnce(503, { detail: 'GPU를 찾을 수 없습니다.' });
+    await expect(requestOutpaint('a.png', {})).rejects.toThrow('GPU를 찾을 수 없습니다.');
+  });
+
+  it('404면 원본 없음 메시지를 던진다', async () => {
+    mockFetchOnce(404, {});
+    await expect(requestOutpaint('nope.png', {})).rejects.toThrow('원본 이미지를 찾을 수 없어요.');
+  });
+
+  it('url이 없으면 에러를 던진다', async () => {
+    mockFetchOnce(200, {});
+    await expect(requestOutpaint('a.png', {})).rejects.toThrow('아웃페인팅 결과를 받지 못했어요.');
   });
 });

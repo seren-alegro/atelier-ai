@@ -288,6 +288,123 @@ export async function requestAdetailer(image, opts = {}) {
   return { url: API_BASE + data.url, faces_detected: data.faces_detected ?? 0 };
 }
 
+/** POST /api/outpaint — 아웃페인팅 (캔버스 확장 + 새 영역 인페인트).
+ *  image: 결과 파일명(output dir 안) 또는 base64 이미지.
+ *  opts: {expand: {up, down, left, right} (각 64~512px),
+ *         prompt, negative_prompt, denoise_strength(기본 0.6), mask_blur(기본 16)}.
+ *  성공 시 완성된 이미지의 절대 URL 반환. */
+export async function requestOutpaint(image, opts = {}) {
+  const {
+    expand = { up: 256, down: 256, left: 256, right: 256 },
+    prompt = '',
+    negative_prompt = '',
+    denoise_strength = 0.6,
+    mask_blur = 16,
+  } = opts;
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/outpaint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image, expand, prompt, negative_prompt, denoise_strength, mask_blur,
+      }),
+    });
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 422) {
+    throw new Error(
+      typeof data.detail === 'string' ? data.detail : '아웃페인팅 설정값이 올바르지 않아요.'
+    );
+  }
+  if (res.status === 503) {
+    throw new Error(
+      typeof data.detail === 'string' && data.detail
+        ? data.detail
+        : '아웃페인팅에는 GPU가 필요해요.'
+    );
+  }
+  if (res.status === 404) throw new Error('원본 이미지를 찾을 수 없어요.');
+  if (res.status === 413) throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
+  if (!res.ok) throw new Error(data.detail || `아웃페인팅 실패 (HTTP ${res.status})`);
+  if (!data.url) throw new Error('아웃페인팅 결과를 받지 못했어요.');
+  return API_BASE + data.url;
+}
+
+/** POST /api/xy-plot — X/Y 플롯 시작.
+ *  xAxis: {type: 'sampler'|'cfg_scale'|'steps'|'seed', values: []}.
+ *  yAxis: 같은 형식 또는 null (없음).
+ *  baseParams: QuickPanel 공통 설정. seedRule: 'fixed' (기본, 비교용) | 'increment'.
+ *  성공 시 {job_id, status} 반환. */
+export async function requestXyPlot(xAxis, yAxis, baseParams, seedRule = 'fixed') {
+  const { loras, upscale_strength, ...rest } = baseParams;
+  const body = {
+    x_axis: xAxis,
+    y_axis: yAxis,
+    base_params: rest,
+    seed_rule: seedRule,
+  };
+  if (loras) body.loras = loras;
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/xy-plot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  const detail = typeof data.detail === 'string' ? data.detail
+    : Array.isArray(data.detail) ? data.detail.join(', ')
+    : null;
+  if (res.status === 422) {
+    throw new Error(detail || 'X/Y 플롯 설정값이 올바르지 않아요.');
+  }
+  if (res.status === 503) {
+    throw new Error(detail || '모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.');
+  }
+  if (res.status === 409) {
+    throw new Error(detail || '다른 배치 작업이 실행 중이에요.');
+  }
+  if (!res.ok) throw new Error(detail || `X/Y 플롯 요청 실패 (HTTP ${res.status})`);
+  if (!data.job_id) throw new Error('X/Y 플롯 작업 ID를 받지 못했어요.');
+  return data;
+}
+
+/** GET /api/xy-plot/{job_id} — X/Y 플롯 진행 상태 조회. */
+export async function getXyPlotJob(jobId) {
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/xy-plot/' + encodeURIComponent(jobId));
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 404) throw new Error('X/Y 플롯 작업을 찾을 수 없어요.');
+  if (!res.ok) throw new Error(data.detail || `상태 조회 실패 (HTTP ${res.status})`);
+  return data;
+}
+
+/** DELETE /api/xy-plot/{job_id} — X/Y 플롯 취소 요청. */
+export async function cancelXyPlotJob(jobId) {
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/xy-plot/' + encodeURIComponent(jobId), {
+      method: 'DELETE',
+    });
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 404) throw new Error('X/Y 플롯 작업을 찾을 수 없어요.');
+  if (!res.ok) throw new Error(data.detail || `취소 실패 (HTTP ${res.status})`);
+  return data;
+}
+
 /** POST /api/batch — 배치 생성 큐 시작.
  *  prompts: 프롬프트 배열 (한 줄에 하나).
  *  params: QuickPanel 공통 설정. loras·upscale_strength는 분리해 별도 전송.

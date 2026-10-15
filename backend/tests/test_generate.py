@@ -33,15 +33,18 @@ class FakePipeline:
 
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
+        self.calls: list[dict] = []  # (메서드, params) 순서대로 기록
 
     def txt2img(self, params: dict, loras: dict | None = None) -> list[str]:
         assert "denoise_strength" not in params or isinstance(
             params["denoise_strength"], (int, float))
+        self.calls.append({"method": "txt2img", "params": dict(params)})
         return self._write("t")
 
     def img2img(self, params: dict, image: str,
                 loras: dict | None = None) -> list[str]:
         assert image and os.path.isfile(image)
+        self.calls.append({"method": "img2img", "params": dict(params)})
         return self._write("i")
 
     def inpaint(self, params: dict, image: str, mask: str,
@@ -167,6 +170,86 @@ def test_generate_inpaint_flow(client):
     job = wait_done(client, r.json()["job_id"])
     assert job["status"] == "done"
     assert job["results"] == ["/api/results/fake-p.png"]
+
+
+# -- Hires Fix ----------------------------------------------------------
+
+def test_generate_hires_fix_flow(client, tmp_path):
+    # 크기 반영 fake로 교체 (기본 fake는 항상 1x1을 쓴다)
+    from io import BytesIO
+
+    from PIL import Image
+
+    outdir = tmp_path / "hires-out"
+    calls: list[dict] = []
+
+    def _write_sized(w: int, h: int, tag: str) -> str:
+        os.makedirs(outdir, exist_ok=True)
+        buf = BytesIO()
+        Image.new("RGB", (w, h), (128, 128, 128)).save(buf, format="PNG")
+        path = os.path.join(outdir, f"sized-{tag}.png")
+        with open(path, "wb") as f:
+            f.write(buf.getvalue())
+        return path
+
+    class SizedFake:
+        def txt2img(self, params: dict, loras=None) -> list[str]:
+            calls.append({"method": "txt2img", "params": dict(params)})
+            return [_write_sized(params["width"], params["height"], "t")]
+
+        def img2img(self, params: dict, image: str, loras=None) -> list[str]:
+            assert image and os.path.isfile(image)
+            calls.append({"method": "img2img", "params": dict(params)})
+            return [_write_sized(params["width"], params["height"], "i")]
+
+    gen.set_pipeline(SizedFake())
+    params = defaults()
+    params.update({"width": 512, "height": 512,
+                   "hires_fix_enabled": True,
+                   "hires_fix_scale": 2.0,
+                   "hires_fix_denoise": 0.35})
+    r = client.post("/api/generate",
+                    json={"mode": "txt2img", "params": params})
+    assert r.status_code == 202
+    job = wait_done(client, r.json()["job_id"])
+    assert job["status"] == "done"
+    # 2단계 img2img 결과가 최종 결과물
+    assert len(job["results"]) == 1
+    assert job["results"][0].endswith("sized-i.png")
+
+    methods = [c["method"] for c in calls]
+    assert methods == ["txt2img", "img2img"]
+    second = calls[1]["params"]
+    # 512 * 2.0 = 1024로 확대되어 img2img에 들어감
+    assert second["width"] == 1024
+    assert second["height"] == 1024
+    assert second["denoise_strength"] == 0.35
+
+
+def test_generate_hires_fix_disabled_by_default(client):
+    r = client.post("/api/generate",
+                    json={"mode": "txt2img", "params": defaults()})
+    assert r.status_code == 202
+    job = wait_done(client, r.json()["job_id"])
+    assert job["status"] == "done"
+    pipe = gen._pipeline
+    assert [c["method"] for c in pipe.calls] == ["txt2img"]
+
+
+def test_generate_hires_fix_bad_scale(client):
+    params = defaults()
+    params.update({"hires_fix_enabled": True, "hires_fix_scale": 5.0})
+    r = client.post("/api/generate",
+                    json={"mode": "txt2img", "params": params})
+    assert r.status_code == 422
+
+
+def test_generate_hires_fix_bad_denoise(client):
+    params = defaults()
+    params.update({"hires_fix_enabled": True, "hires_fix_denoise": 0.9})
+    r = client.post("/api/generate",
+                    json={"mode": "txt2img", "params": params})
+    assert r.status_code == 422
 
 
 def test_job_not_found(client):
