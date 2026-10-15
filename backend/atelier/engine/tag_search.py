@@ -30,7 +30,8 @@ _entries: list[dict] | None = None  # {tag, category, count, desc_ko}
 
 def _resolve_csv() -> Path:
     """CSV 경로 탐색: 패키지 내장 → frozen → 사용자 데이터 dir 순."""
-    bundled = Path(__file__).resolve().parent / "data" / CSV_NAME
+    # tag_search.py는 engine/ 안에 있으므로 data/는 한 단계 위(atelier/)에 있다.
+    bundled = Path(__file__).resolve().parent.parent / "data" / CSV_NAME
     if bundled.is_file():
         return bundled
     meipass = getattr(sys, "_MEIPASS", None)
