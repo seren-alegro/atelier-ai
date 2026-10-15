@@ -3,7 +3,7 @@
   import { store } from './store.svelte.js';
   import { historyStore, loadHistory } from './history.svelte.js';
   import TagInput from './TagInput.svelte';
-  import { requestGenerate, requestUpscale, requestAdetailer, apiUrl } from './api.js';
+  import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, apiUrl } from './api.js';
 
   let { onLoad = null } = $props();
 
@@ -14,6 +14,22 @@
   let recentLoaded = $state(false);
   let upscaling = $state({}); // src → true (업스케일 진행 중인 이미지)
   let retouching = $state({}); // src → true (얼굴 보정 진행 중인 이미지)
+
+  // 배치 생성 큐
+  let batchText = $state('');
+  let batchJob = $state(null); // {job_id, status, total, done, items}
+  let batchBusy = $state(false);
+  let batchNotice = $state('');
+  let batchAdded = 0; // 갤러리에 이미 추가한 항목 수 (순서대로)
+  let batchTimer = null;
+
+  const batchCount = $derived(
+    batchText.split('\n').map((s) => s.trim()).filter(Boolean).length
+  );
+  const batchStatusLabel = {
+    queued: '대기중', running: '생성중…', done: '완료',
+    error: '실패', cancelled: '취소됨',
+  };
 
   const recents = $derived(
     (historyStore.items ?? [])
@@ -89,6 +105,62 @@
       delete retouching[src];
     }
   }
+
+  async function onBatchStart() {
+    const prompts = batchText.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (prompts.length === 0) {
+      batchNotice = '프롬프트를 한 줄에 하나씩 입력해주세요.';
+      return;
+    }
+    batchNotice = '';
+    batchBusy = true;
+    batchAdded = 0;
+    batchJob = null;
+    try {
+      const { job_id } = await requestBatch(prompts, { ...store.values });
+      batchTimer = setInterval(() => pollBatch(job_id), 1500);
+      await pollBatch(job_id);
+    } catch (e) {
+      batchNotice = e.message || '배치 시작 중 오류가 발생했어요.';
+      batchBusy = false;
+    }
+  }
+
+  async function pollBatch(jobId) {
+    try {
+      const job = await getBatchJob(jobId);
+      batchJob = job;
+      // 순서대로 완료된 항목을 갤러리에 추가
+      for (let i = batchAdded; i < job.items.length; i++) {
+        const it = job.items[i];
+        if (it.status === 'done') {
+          if (it.url) results = [...results, apiUrl(it.url)];
+          batchAdded = i + 1;
+        } else if (it.status === 'error' || it.status === 'cancelled') {
+          batchAdded = i + 1;
+        } else {
+          break;
+        }
+      }
+      if (job.status === 'done' || job.status === 'cancelled' || job.status === 'error') {
+        if (batchTimer) { clearInterval(batchTimer); batchTimer = null; }
+        batchBusy = false;
+      }
+    } catch (e) {
+      batchNotice = e.message || '배치 상태를 확인할 수 없어요.';
+      if (batchTimer) { clearInterval(batchTimer); batchTimer = null; }
+      batchBusy = false;
+    }
+  }
+
+  async function onBatchCancel() {
+    if (!batchJob) return;
+    try {
+      batchJob = await cancelBatchJob(batchJob.job_id);
+    } catch (e) {
+      batchNotice = e.message || '배치 취소 중 오류가 발생했어요.';
+    }
+  }
 </script>
 
 <div class="generate-tab">
@@ -109,7 +181,7 @@
     </details>
 
     <div class="btn-row">
-      <button class="btn primary cta" onclick={onGenerate} disabled={busy || !store.loaded}>
+      <button class="btn primary cta" onclick={onGenerate} disabled={busy || batchBusy || !store.loaded}>
         {busy ? '생성 중…' : '✦ 그림 생성하기 →'}
       </button>
       {#if busy}
@@ -117,6 +189,62 @@
       {/if}
     </div>
     {#if notice}<p class="notice">{notice}</p>{/if}
+
+    <details class="batch">
+      <summary class="field-label">📋 배치 생성 (여러 프롬프트 한 번에)</summary>
+      <div class="batch-body">
+        <textarea
+          class="batch-text"
+          rows="6"
+          bind:value={batchText}
+          placeholder={'한 줄에 프롬프트 하나씩 입력\n예)\n1girl, solo, red dress, smile\n1girl, solo, blue kimono, night'}
+          disabled={batchBusy}
+        ></textarea>
+        <p class="batch-hint">
+          우측 패널의 설정(모델·해상도·샘플러·CFG·스텝·시드)을 공통으로 사용해요.
+          시드가 고정돼 있으면 항목마다 1씩 증가하고, 랜덤이면 매번 새로 뽑아요.
+        </p>
+        <div class="btn-row">
+          <button
+            class="btn primary"
+            onclick={onBatchStart}
+            disabled={batchBusy || busy || batchCount === 0 || !store.loaded}
+          >
+            {batchBusy ? '배치 실행 중…' : `📋 배치 시작 (${batchCount}개)`}
+          </button>
+          {#if batchBusy}
+            <button class="btn" onclick={onBatchCancel}>배치 취소</button>
+          {/if}
+        </div>
+        {#if batchNotice}<p class="notice">{batchNotice}</p>{/if}
+        {#if batchJob}
+          <div class="batch-progress">
+            <div
+              class="batch-progress-bar"
+              style="width: {batchJob.total > 0 ? Math.round((batchJob.done / batchJob.total) * 100) : 0}%"
+            ></div>
+          </div>
+          <p class="batch-status">
+            {batchJob.done} / {batchJob.total} —
+            {batchStatusLabel[batchJob.status] ?? batchJob.status}
+          </p>
+          <ul class="batch-list">
+            {#each batchJob.items as item, i (i)}
+              <li class="batch-item" class:failed={item.status === 'error'}>
+                <span class="batch-item-status">{batchStatusLabel[item.status] ?? item.status}</span>
+                <span class="batch-item-prompt" title={item.prompt}>{item.prompt}</span>
+                {#if item.status === 'done' && item.url}
+                  <img class="batch-item-thumb" src={apiUrl(item.url)} alt="배치 결과" loading="lazy" />
+                {/if}
+                {#if item.status === 'error' && item.error}
+                  <span class="batch-item-error" title={item.error}>⚠</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    </details>
   </div>
 
   <div class="canvas" class:has-results={results.length > 0}>
@@ -288,4 +416,103 @@
     background: rgba(20, 22, 43, 0.85);
     backdrop-filter: blur(4px);
   }
+  .batch { margin-top: 12px; }
+  .batch summary {
+    cursor: pointer;
+    list-style: none;
+    color: #9aa0c7;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+  }
+  .batch summary::-webkit-details-marker { display: none; }
+  .batch summary::after {
+    content: '▾';
+    margin-left: auto;
+    color: #6b7090;
+    transition: transform 0.18s;
+  }
+  .batch[open] summary::after { transform: rotate(180deg); }
+  .batch summary:hover { color: #cfd2ea; }
+  .batch-body { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .batch-text {
+    width: 100%;
+    box-sizing: border-box;
+    background: #14162b;
+    border: 1px solid #2c2f52;
+    border-radius: 10px;
+    color: #e8eaf6;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    resize: vertical;
+  }
+  .batch-text:disabled { opacity: 0.6; }
+  .batch-hint {
+    margin: 0;
+    color: #6b7090;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .batch-progress {
+    height: 8px;
+    background: #14162b;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .batch-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #7c6cf0, #a78bfa);
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+  .batch-status {
+    margin: 0;
+    color: #9aa0c7;
+    font-size: 13px;
+  }
+  .batch-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .batch-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #14162b;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12.5px;
+  }
+  .batch-item.failed { border: 1px solid #7a3040; }
+  .batch-item-status {
+    flex-shrink: 0;
+    min-width: 52px;
+    color: #9aa0c7;
+    font-size: 12px;
+  }
+  .batch-item-prompt {
+    flex: 1;
+    color: #cfd2ea;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .batch-item-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .batch-item-error { color: #e08090; flex-shrink: 0; }
 </style>

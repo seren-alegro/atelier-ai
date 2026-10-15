@@ -288,6 +288,72 @@ export async function requestAdetailer(image, opts = {}) {
   return { url: API_BASE + data.url, faces_detected: data.faces_detected ?? 0 };
 }
 
+/** POST /api/batch — 배치 생성 큐 시작.
+ *  prompts: 프롬프트 배열 (한 줄에 하나).
+ *  params: QuickPanel 공통 설정. loras·upscale_strength는 분리해 별도 전송.
+ *  성공 시 {job_id, status} 반환. */
+export async function requestBatch(prompts, params) {
+  const { loras, upscale_strength, ...rest } = params;
+  const body = { prompts, params: rest };
+  if (loras) body.loras = loras;
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  const detail = typeof data.detail === 'string' ? data.detail
+    : Array.isArray(data.detail) ? data.detail.join(', ')
+    : null;
+  if (res.status === 422) {
+    throw new Error(detail || '배치 설정값이 올바르지 않아요.');
+  }
+  if (res.status === 503) {
+    throw new Error(detail || '모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.');
+  }
+  if (res.status === 409) {
+    throw new Error(detail || '다른 배치 작업이 실행 중이에요.');
+  }
+  if (!res.ok) throw new Error(detail || `배치 요청 실패 (HTTP ${res.status})`);
+  if (!data.job_id) throw new Error('배치 작업 ID를 받지 못했어요.');
+  return data;
+}
+
+/** GET /api/batch/{job_id} — 배치 진행 상태 조회. */
+export async function getBatchJob(jobId) {
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/batch/' + encodeURIComponent(jobId));
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 404) throw new Error('배치 작업을 찾을 수 없어요.');
+  if (!res.ok) throw new Error(data.detail || `상태 조회 실패 (HTTP ${res.status})`);
+  return data;
+}
+
+/** DELETE /api/batch/{job_id} — 배치 취소 요청. */
+export async function cancelBatchJob(jobId) {
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/batch/' + encodeURIComponent(jobId), {
+      method: 'DELETE',
+    });
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 404) throw new Error('배치 작업을 찾을 수 없어요.');
+  if (!res.ok) throw new Error(data.detail || `취소 실패 (HTTP ${res.status})`);
+  return data;
+}
+
 /** POST /api/train — LoRA 학습 요청. {job_id, total_steps} 반환. */
 export async function requestTrain(trainParams) {
   const res = await fetch(API_BASE + '/api/train', {

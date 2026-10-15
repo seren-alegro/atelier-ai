@@ -1,6 +1,6 @@
 // api.js 테스트 — fetch를 모킹해 요청 body 구성과 에러 메시지 변환을 검증.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { requestGenerate, requestAdetailer } from './api.js';
+import { requestGenerate, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob } from './api.js';
 
 const API = 'http://127.0.0.1:8079';
 
@@ -157,5 +157,74 @@ describe('requestAdetailer', () => {
   it('네트워크 실패면 한국어 메시지를 던진다', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('boom'));
     await expect(requestAdetailer('a.png')).rejects.toThrow('백엔드에 연결할 수 없어요');
+  });
+});
+
+describe('requestBatch', () => {
+  it('loras를 params에서 분리해 별도 필드로 보낸다', async () => {
+    mockFetchOnce(202, { job_id: 'b1', status: 'queued' });
+    const r = await requestBatch(['1girl', '2girls'], {
+      prompt: 'base',
+      loras: { 'lora/a.safetensors': { enabled: true, strength: 0.8 } },
+      upscale_strength: 0.7,
+    });
+    expect(r.job_id).toBe('b1');
+    const sentBody = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(sentBody.prompts).toEqual(['1girl', '2girls']);
+    expect(sentBody.params.loras).toBeUndefined();
+    expect(sentBody.params.upscale_strength).toBeUndefined();
+    expect(sentBody.loras).toEqual({
+      'lora/a.safetensors': { enabled: true, strength: 0.8 },
+    });
+  });
+
+  it('422면 백엔드의 한국어 detail을 그대로 던진다', async () => {
+    mockFetchOnce(422, { detail: '프롬프트가 비어 있어요.' });
+    await expect(requestBatch([], {})).rejects.toThrow('프롬프트가 비어 있어요.');
+  });
+
+  it('409면 다른 배치 실행 중 메시지를 던진다', async () => {
+    mockFetchOnce(409, { detail: '다른 배치 작업이 실행 중이에요.' });
+    await expect(requestBatch(['a'], {})).rejects.toThrow('다른 배치 작업이 실행 중이에요.');
+  });
+
+  it('503이면 백엔드의 detail을 던진다', async () => {
+    mockFetchOnce(503, { detail: '모델이 설정되지 않았어요.' });
+    await expect(requestBatch(['a'], {})).rejects.toThrow('모델이 설정되지 않았어요.');
+  });
+
+  it('job_id가 없으면 에러를 던진다', async () => {
+    mockFetchOnce(202, {});
+    await expect(requestBatch(['a'], {})).rejects.toThrow('배치 작업 ID를 받지 못했어요.');
+  });
+
+  it('네트워크 실패면 한국어 메시지를 던진다', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('boom'));
+    await expect(requestBatch(['a'], {})).rejects.toThrow('백엔드에 연결할 수 없어요');
+  });
+});
+
+describe('getBatchJob / cancelBatchJob', () => {
+  it('상태를 그대로 반환한다', async () => {
+    const body = { job_id: 'b1', status: 'running', total: 2, done: 1, items: [] };
+    mockFetchOnce(200, body);
+    const r = await getBatchJob('b1');
+    expect(r).toEqual(body);
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(API + '/api/batch/b1');
+  });
+
+  it('없는 작업이면 404 메시지를 던진다', async () => {
+    mockFetchOnce(404, { detail: '배치 작업을 찾을 수 없어요.' });
+    await expect(getBatchJob('nope')).rejects.toThrow('배치 작업을 찾을 수 없어요.');
+  });
+
+  it('취소는 DELETE로 요청한다', async () => {
+    const body = { job_id: 'b1', status: 'cancelled', total: 2, done: 1, items: [] };
+    mockFetchOnce(200, body);
+    const r = await cancelBatchJob('b1');
+    expect(r.status).toBe('cancelled');
+    const [url, opts] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(API + '/api/batch/b1');
+    expect(opts.method).toBe('DELETE');
   });
 });
