@@ -10,6 +10,8 @@ A desktop tool dedicated to image generation, with an intuitive UI that beginner
 - Danbooru-style tag-first UX
 - Every setting shows a Korean explanation + recommended value
 
+📖 [User Guide](docs/GUIDE.en.md) — what this tool is and what it can do, for first-time users
+
 ## Installation (first time)
 
 ### 1. Prerequisites
