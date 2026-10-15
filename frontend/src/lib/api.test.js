@@ -1,6 +1,6 @@
 // api.js 테스트 — fetch를 모킹해 요청 body 구성과 에러 메시지 변환을 검증.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { requestGenerate, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestXyPlot, getXyPlotJob, cancelXyPlotJob, requestOutpaint } from './api.js';
+import { requestGenerate, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestXyPlot, getXyPlotJob, cancelXyPlotJob, requestOutpaint, searchTags } from './api.js';
 
 const API = 'http://127.0.0.1:8079';
 
@@ -343,5 +343,31 @@ describe('requestOutpaint', () => {
   it('url이 없으면 에러를 던진다', async () => {
     mockFetchOnce(200, {});
     await expect(requestOutpaint('a.png', {})).rejects.toThrow('아웃페인팅 결과를 받지 못했어요.');
+  });
+});
+
+describe('searchTags', () => {
+  it('q와 limit을 쿼리스트링으로 보낸다', async () => {
+    const body = { count: 83687, results: [{ tag: 'blue_eyes', category: 0, count: 4000000, desc_ko: '파란 눈' }] };
+    mockFetchOnce(200, body);
+    const r = await searchTags('파란눈', 50);
+    expect(r).toEqual(body);
+    const [url] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(API + '/api/tag-search?q=' + encodeURIComponent('파란눈') + '&limit=50');
+  });
+
+  it('422면 백엔드의 한국어 detail을 그대로 던진다', async () => {
+    mockFetchOnce(422, { detail: '검색어를 입력해주세요.' });
+    await expect(searchTags('')).rejects.toThrow('검색어를 입력해주세요.');
+  });
+
+  it('503이면 태그 데이터 오류 메시지를 던진다', async () => {
+    mockFetchOnce(503, {});
+    await expect(searchTags('hair')).rejects.toThrow('태그 데이터를 불러오지 못했어요. 백엔드를 확인해주세요.');
+  });
+
+  it('연결 실패면 한국어 메시지를 던진다', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('boom'));
+    await expect(searchTags('hair')).rejects.toThrow('백엔드에 연결할 수 없어요.');
   });
 });

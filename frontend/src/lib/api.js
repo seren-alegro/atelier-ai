@@ -148,6 +148,32 @@ export async function fetchModels() {
   }
 }
 
+/** GET /api/tag-search — 단보루 태그 검색. {count, results} 반환.
+ *  네트워크 에러 메시지는 한국어로 바꿔서 던진다. */
+export async function searchTags(q, limit = 50) {
+  let res;
+  try {
+    res = await fetch(
+      API_BASE + '/api/tag-search?q=' + encodeURIComponent(q) + '&limit=' + limit
+    );
+  } catch {
+    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+  }
+  if (res.status === 422) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      typeof err.detail === 'string' && err.detail
+        ? err.detail
+        : '검색어를 입력해주세요.'
+    );
+  }
+  if (res.status === 503) {
+    throw new Error('태그 데이터를 불러오지 못했어요. 백엔드를 확인해주세요.');
+  }
+  if (!res.ok) throw new Error(`검색 실패 (HTTP ${res.status})`);
+  return await res.json();
+}
+
 /** POST /api/models/active — 활성 체크포인트 전환 */
 export async function setActiveModel(name) {
   const res = await fetch(API_BASE + '/api/models/active', {

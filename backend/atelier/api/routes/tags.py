@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from atelier.engine import tag_labels as tl
+from atelier.engine import tag_search as ts
 
 router = APIRouter()
 
@@ -28,3 +29,22 @@ def get_tag_labels():
         "count": len(labels),
         "labels": labels,
     }
+
+
+@router.get("/api/tag-search")
+def search_tags(q: str = "", limit: int = 50):
+    """단보루 태그 검색. q 없거나 비면 422, limit은 1~100."""
+    if not (q or "").strip():
+        raise HTTPException(status_code=422, detail="검색어를 입력해주세요.")
+    if not 1 <= limit <= 100:
+        raise HTTPException(
+            status_code=422, detail="limit은 1~100 사이여야 해요.")
+    try:
+        results = ts.search(q, limit=limit)
+        total = ts.total_count()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:  # noqa: BLE001 - 파싱 실패 등
+        raise HTTPException(
+            status_code=503, detail=f"태그 검색 중 오류가 발생했어요: {e}")
+    return {"count": total, "results": results}

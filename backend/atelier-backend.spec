@@ -7,7 +7,10 @@
 
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [
+    # 프롬프트 태그 검색용 단보루 태그 CSV (24MB, 카테고리 1·3 제외 후 로드)
+    ("atelier/data/danbooru-tags-kr.csv", "atelier/data"),
+]
 binaries = []
 hiddenimports = [
     # uvicorn이 동적으로 고르는 모듈들
