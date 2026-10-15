@@ -57,9 +57,9 @@ html, body { height: 100%; }
   overflow: hidden;
 }
 
-/* 왼쪽 사이드바 */
+/* 왼쪽 사이드바 (영어 라벨이 잘리지 않게 88→108px) */
 .sidenav {
-  width: 88px;
+  width: 108px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
