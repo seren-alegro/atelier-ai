@@ -1,7 +1,7 @@
 <script>
   // 인페인트 탭: 이미지 업로드 → 마스크 브러시 → inpaint 생성
   import { store } from './store.svelte.js';
-  import { t } from './i18n.svelte.js';
+  import { t, metaDesc } from './i18n.svelte.js';
   import TagInput from './TagInput.svelte';
   import { requestGenerate } from './api.js';
 
@@ -256,7 +256,7 @@
       <span class="field-label">{t('inp.denoise')}</span>
       <span class="recommended">{t('common.recommended')} {denoiseMeta()?.recommended ?? 0.75}</span>
     </div>
-    <p class="field-desc">{denoiseMeta()?.description ?? t('inp.denoiseDesc')}</p>
+    <p class="field-desc">{metaDesc(denoiseMeta()) ?? t('inp.denoiseDesc')}</p>
     <div class="number-row">
       <input
         type="range"

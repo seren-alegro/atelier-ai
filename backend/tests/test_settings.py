@@ -1,5 +1,8 @@
-"""settings.py 테스트: 기본값·범위·validate()."""
+"""settings.py 테스트: 기본값·범위·validate()·다국어 필드."""
 
+from fastapi.testclient import TestClient
+
+from atelier.api import app as app_module
 from atelier.settings import SETTINGS, defaults, get_setting, validate
 
 
@@ -66,3 +69,25 @@ def test_validate_seed_allows_any_nonneg():
     assert validate({"seed": 0}) == {}
     assert validate({"seed": 999999}) == {}
     assert "seed" in validate({"seed": -2})
+
+
+def test_all_settings_have_translations():
+    for s in SETTINGS:
+        assert s.label_en.strip(), s.key
+        assert s.description_en.strip(), s.key
+        assert s.label_ja.strip(), s.key
+        assert s.description_ja.strip(), s.key
+
+
+def test_api_settings_includes_language_fields():
+    client = TestClient(app_module.create_app())
+    r = client.get("/api/settings")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == len(SETTINGS)
+    for entry in body:
+        for f in ("label_en", "description_en", "label_ja", "description_ja"):
+            assert entry[f].strip(), (entry["key"], f)
+    by_key = {e["key"]: e for e in body}
+    assert by_key["steps"]["label_en"] == "Steps"
+    assert by_key["steps"]["label_ja"] == "ステップ数"

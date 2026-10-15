@@ -7,6 +7,8 @@ import {
   setLang,
   toggleLang,
   LANGS,
+  metaLabel,
+  metaDesc,
 } from './i18n.svelte.js';
 
 const DICT = _dictForTest();
@@ -83,5 +85,51 @@ describe('setLang/toggleLang', () => {
     setLang('ja');
     expect(localStorage.getItem('atelier-ai-lang')).toBe('ja');
     setLang('ko');
+  });
+});
+
+describe('metaLabel/metaDesc', () => {
+  const m = {
+    label: '스텝 수',
+    description: '그림을 다듬는 반복 횟수예요.',
+    label_en: 'Steps',
+    description_en: 'How many refinement iterations to run.',
+    label_ja: 'ステップ数',
+    description_ja: '画像を整える反復回数です。',
+  };
+
+  beforeEach(() => setLang('ko'));
+
+  it('ko에서는 label/description을 그대로 쓴다', () => {
+    expect(metaLabel(m)).toBe('스텝 수');
+    expect(metaDesc(m)).toBe('그림을 다듬는 반복 횟수예요.');
+  });
+
+  it('en에서는 _en 필드를 쓴다', () => {
+    setLang('en');
+    expect(metaLabel(m)).toBe('Steps');
+    expect(metaDesc(m)).toBe('How many refinement iterations to run.');
+  });
+
+  it('ja에서는 _ja 필드를 쓴다', () => {
+    setLang('ja');
+    expect(metaLabel(m)).toBe('ステップ数');
+    expect(metaDesc(m)).toBe('画像を整える反復回数です。');
+  });
+
+  it('_en/_ja가 비어 있으면 한국어로 폴백한다', () => {
+    const bare = { label: '스텝 수', description: '설명', label_en: '', description_en: '', label_ja: '', description_ja: '' };
+    setLang('en');
+    expect(metaLabel(bare)).toBe('스텝 수');
+    expect(metaDesc(bare)).toBe('설명');
+    setLang('ja');
+    expect(metaLabel(bare)).toBe('스텝 수');
+    expect(metaDesc(bare)).toBe('설명');
+  });
+
+  it('meta가 없으면 undefined (?? 폴백용)', () => {
+    setLang('en');
+    expect(metaLabel(null)).toBeUndefined();
+    expect(metaDesc(undefined)).toBeUndefined();
   });
 });

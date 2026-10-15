@@ -3,16 +3,16 @@
   import SettingField from './SettingField.svelte';
   import TagInput from './TagInput.svelte';
   import UpdatePanel from './UpdatePanel.svelte';
-  import { t, getLang, setLang, LANGS } from './i18n.svelte.js';
+  import { t, getLang, setLang, LANGS, metaLabel, metaDesc } from './i18n.svelte.js';
 
   // 프롬프트 계열은 칩 입력 UI 사용
   const TEXT_AS_TAGS = new Set(['prompt', 'negative_prompt']);
 
   function fieldLabel(setting) {
-    return setting.labelKey ? t(setting.labelKey) : setting.label;
+    return setting.labelKey ? t(setting.labelKey) : metaLabel(setting);
   }
   function fieldDesc(setting) {
-    return setting.descKey ? t(setting.descKey) : setting.description;
+    return setting.descKey ? t(setting.descKey) : metaDesc(setting);
   }
 </script>
 

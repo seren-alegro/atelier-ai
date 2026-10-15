@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 @dataclass(frozen=True)
 class Setting:
     key: str
-    label: str            # UI 표시 이름
+    label: str            # UI 표시 이름 (한국어)
     description: str      # 초보자용 한국어 설명
     recommended: object   # 추천값 (Anima 기준)
     kind: str = "number"  # number | choice | text | toggle
@@ -20,6 +20,10 @@ class Setting:
     max: float | None = None
     options: list[str] = field(default_factory=list)
     unit: str = ""
+    label_en: str = ""        # 영어 UI 표시 이름
+    description_en: str = ""  # 영어 설명
+    label_ja: str = ""        # 일본어 UI 표시 이름
+    description_ja: str = ""  # 일본어 설명
 
 
 SETTINGS: list[Setting] = [
@@ -30,6 +34,12 @@ SETTINGS: list[Setting] = [
                     "쉼표로 구분하고, 앞에 적을수록 강하게 반영돼요.",
         recommended="1girl, solo",
         kind="text",
+        label_en="Prompt",
+        description_en="Describe what you want to draw using Danbooru-style tags. "
+                       "Separate with commas — tags written earlier have stronger influence.",
+        label_ja="プロンプト",
+        description_ja="描きたい内容をDanbooru式タグで書いてください。"
+                       "カンマで区切り、先に書くほど強く反映されます。",
     ),
     Setting(
         key="negative_prompt",
@@ -38,6 +48,12 @@ SETTINGS: list[Setting] = [
                     "손가락이 이상하게 나오는 게 싫으면 여기에 적어요.",
         recommended="worst quality, low quality, bad anatomy",
         kind="text",
+        label_en="Negative prompt",
+        description_en="Write what you don't want drawn. "
+                       "If you hate weird-looking fingers, put it here.",
+        label_ja="ネガティブプロンプト",
+        description_ja="描いてほしくないものを書いてください。"
+                       "指が変になるのが嫌ならここに書きます。",
     ),
     Setting(
         key="steps",
@@ -46,6 +62,11 @@ SETTINGS: list[Setting] = [
         recommended=50,
         min=20,
         max=50,
+        label_en="Steps",
+        description_en="How many refinement iterations to run. "
+                       "The official Anima spec is 50 steps.",
+        label_ja="ステップ数",
+        description_ja="画像を整える反復回数です。Anima公式仕様は50ステップです。",
     ),
     Setting(
         key="cfg_scale",
@@ -56,6 +77,14 @@ SETTINGS: list[Setting] = [
         recommended=5.0,
         min=1.0,
         max=9.0,
+        label_en="CFG scale",
+        description_en="How strictly to follow the prompt. "
+                       "Higher sticks closer to the prompt, lower lets the AI roam free. "
+                       "Too high burns colors and breaks the image.",
+        label_ja="CFGスケール",
+        description_ja="プロンプトにどれだけ忠実に従うかを決めます。"
+                       "高くなるほどプロンプト通り、低くなるほどAIの自由になります。"
+                       "高すぎると色が飛んで壊れます。",
     ),
     Setting(
         key="sampler",
@@ -68,6 +97,15 @@ SETTINGS: list[Setting] = [
         options=["er_sde", "dpmpp_2m_sde_gpu", "dpmpp_2m_sde",
                  "euler_ancestral", "dpmpp_2m_karras", "ddim",
                  "restart", "sa_solver", "deis", "lcm", "tcd"],
+        label_en="Sampler",
+        description_en="The drawing method. Anima works well with the SDE family, "
+                       "and er_sde is the default recommendation. Lab entries need "
+                       "hands-on testing (restart is slow but clean, lcm/tcd finish "
+                       "in a few steps).",
+        label_ja="サンプラー",
+        description_ja="画像を描き進める方式です。AnimaにはSDE系がよく合います。"
+                       "er_sdeが基本のおすすめです。実験室の項目は相性を自分で試す"
+                       "必要があります（restartは遅いが綺麗に、lcm/tcdは数ステップで描きます）。",
     ),
     Setting(
         key="width",
@@ -76,6 +114,10 @@ SETTINGS: list[Setting] = [
         recommended=832,
         min=256,
         max=2048,
+        label_en="Width",
+        description_en="Image width in pixels. Larger uses more VRAM.",
+        label_ja="横幅",
+        description_ja="画像の横サイズです。大きいほどVRAMを多く使います。",
     ),
     Setting(
         key="height",
@@ -84,6 +126,10 @@ SETTINGS: list[Setting] = [
         recommended=1216,
         min=256,
         max=2048,
+        label_en="Height",
+        description_en="Image height in pixels. 832x1216 is a safe pick for portraits.",
+        label_ja="縦幅",
+        description_ja="画像の縦サイズです。縦長の絵には832x1216が無難です。",
     ),
     Setting(
         key="seed",
@@ -93,6 +139,12 @@ SETTINGS: list[Setting] = [
         recommended=-1,
         min=-1,
         max=2**32 - 1,  # torch.Generator.manual_seed 오버플로우 방지
+        label_en="Seed",
+        description_en="The random seed. -1 picks a new one every time; "
+                       "fixing a number lets you redraw the same composition.",
+        label_ja="シード",
+        description_ja="画像のランダムシードです。-1なら毎回変わり、"
+                       "数字を固定すると同じ構図を再描画できます。",
     ),
     Setting(
         key="denoise_strength",
@@ -102,6 +154,12 @@ SETTINGS: list[Setting] = [
         recommended=0.75,
         min=0.0,
         max=1.0,
+        label_en="Denoise strength",
+        description_en="How much to change the original in img2img/inpainting. "
+                       "Higher drifts further from the original, lower preserves it.",
+        label_ja="デノイズ強度",
+        description_ja="img2img・インペイントで元画像をどれだけ変えるかを決めます。"
+                       "高くなるほど元画像から離れ、低くなるほど維持します。",
     ),
     Setting(
         key="hires_fix_enabled",
@@ -111,6 +169,14 @@ SETTINGS: list[Setting] = [
                     "시간이 약 2배 걸리지만 얼굴·손 같은 잔붕괴가 줄어요.",
         recommended=False,
         kind="toggle",
+        label_en="Use Hires Fix",
+        description_en="Enables high-resolution fix after generation. Draws small first, "
+                       "upscales, then lightly redraws for detail. Takes about 2x longer "
+                       "but reduces broken faces and hands.",
+        label_ja="Hires Fixを使用",
+        description_ja="生成後の高解像度補正をオンにします。小さい解像度で先に描き、"
+                       "拡大してから軽く描き直してディテールを整えます。"
+                       "時間は約2倍かかりますが、顔・手などの崩れが減ります。",
     ),
     Setting(
         key="hires_fix_scale",
@@ -120,6 +186,12 @@ SETTINGS: list[Setting] = [
         recommended=2.0,
         min=1.25,
         max=3.0,
+        label_en="Hires Fix scale",
+        description_en="How much to upscale in Hires Fix. "
+                       "2.0 doubles width and height each.",
+        label_ja="Hires Fix倍率",
+        description_ja="Hires Fixで何倍に拡大するかを決めます。"
+                       "2.0なら縦・横がそれぞれ2倍になります。",
     ),
     Setting(
         key="hires_fix_denoise",
@@ -129,6 +201,12 @@ SETTINGS: list[Setting] = [
         recommended=0.35,
         min=0.1,
         max=0.7,
+        label_en="Hires Fix denoise",
+        description_en="How much to redraw in the second Hires Fix pass. "
+                       "Higher drifts from the original composition, lower preserves it.",
+        label_ja="Hires Fixデノイズ",
+        description_ja="Hires Fixの第2段階でどれだけ描き直すかを決めます。"
+                       "高くなるほど元の構図から離れ、低くなるほど維持します。",
     ),
     Setting(
         key="batch_size",
@@ -137,6 +215,10 @@ SETTINGS: list[Setting] = [
         recommended=1,
         min=1,
         max=8,
+        label_en="Batch size",
+        description_en="How many images to generate at once. More uses more VRAM.",
+        label_ja="同時生成枚数",
+        description_ja="一度に何枚描くかを決めます。多いほどVRAMを多く使います。",
     ),
     Setting(
         key="controlnet_model",
@@ -147,6 +229,16 @@ SETTINGS: list[Setting] = [
                     "비워두면 기본값(xinsir/controlnet-openpose-sdxl-1.0)을 받아와요.",
         recommended="",
         kind="text",
+        label_en="ControlNet model",
+        description_en="The ControlNet model for pose control. Drop .safetensors files "
+                       "into models/controlnet/ to pick from the list, or type a "
+                       "HuggingFace repo id directly. Leave empty to fetch the default "
+                       "(xinsir/controlnet-openpose-sdxl-1.0).",
+        label_ja="ControlNetモデル",
+        description_ja="ポーズ指定に使うControlNetモデルです。models/controlnet/フォルダに"
+                       ".safetensorsファイルを入れると一覧から選べ、HuggingFaceのrepo idを"
+                       "直接書いても構いません。空ならデフォルト"
+                       "（xinsir/controlnet-openpose-sdxl-1.0）を取得します。",
     ),
     Setting(
         key="controlnet_strength",
@@ -156,6 +248,12 @@ SETTINGS: list[Setting] = [
         recommended=0.8,
         min=0.0,
         max=1.0,
+        label_en="ControlNet strength",
+        description_en="How strictly to follow the pose. Higher follows the pose map "
+                       "tightly, lower gives more freedom.",
+        label_ja="ControlNet強度",
+        description_ja="ポーズにどれだけ従うかを決めます。高くなるほどポーズマップに"
+                       "厳密に従い、低くなるほど自由になります。",
     ),
 ]
 

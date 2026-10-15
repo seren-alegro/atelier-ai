@@ -2,7 +2,7 @@
   // 포즈 탭: 포즈맵(OpenPose 스켈레톤 PNG) 업로드 또는 사진에서 자동 추출
   // → ControlNet으로 포즈 지정 생성
   import { onMount } from 'svelte';
-  import { t } from './i18n.svelte.js';
+  import { t, metaDesc } from './i18n.svelte.js';
   import { store } from './store.svelte.js';
   import TagInput from './TagInput.svelte';
   import { requestGenerate, requestPoseDetect } from './api.js';
@@ -165,7 +165,7 @@
         {/each}
       </select>
     {/if}
-    <p class="field-desc">{modelMeta()?.description ?? ''}</p>
+    <p class="field-desc">{metaDesc(modelMeta()) ?? ''}</p>
     {#if cns.length === 0 && !modelStore.loading}
       <p class="recommended">{t('pose.cnEmpty')}</p>
     {/if}
@@ -176,7 +176,7 @@
       <span class="field-label">{t('pose.strengthLabel')}</span>
       <span class="recommended">{t('common.recommended')} {strengthMeta()?.recommended ?? 0.8}</span>
     </div>
-    <p class="field-desc">{strengthMeta()?.description ?? t('pose.strengthDesc')}</p>
+    <p class="field-desc">{metaDesc(strengthMeta()) ?? t('pose.strengthDesc')}</p>
     <div class="number-row">
       <input
         type="range"

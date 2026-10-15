@@ -63,6 +63,25 @@ export function t(key, params) {
   return s;
 }
 
+// 백엔드 설정 메타(/api/settings)의 label/description을 현재 언어에 맞게 고른다.
+// 템플릿에서 호출하면 getLang()의 $state를 읽으므로 언어 전환 시 자동 리렌더된다.
+// m이 없으면 undefined (?? 폴백과 함께 쓰기 위함).
+export function metaLabel(m) {
+  if (!m) return undefined;
+  const l = getLang();
+  if (l === 'en') return m.label_en || m.label;
+  if (l === 'ja') return m.label_ja || m.label;
+  return m.label;
+}
+
+export function metaDesc(m) {
+  if (!m) return undefined;
+  const l = getLang();
+  if (l === 'en') return m.description_en || m.description;
+  if (l === 'ja') return m.description_ja || m.description;
+  return m.description;
+}
+
 // 테스트용: 전체 딕셔너리 접근
 export function _dictForTest() {
   return DICT;

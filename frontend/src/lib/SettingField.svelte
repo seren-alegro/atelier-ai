@@ -1,12 +1,13 @@
 <script>
   import { resetOne } from './store.svelte.js';
-  import { t } from './i18n.svelte.js';
+  import { t, metaLabel, metaDesc } from './i18n.svelte.js';
   // setting: 설정 메타, value: 현재값 (bindable)
   // label/description은 labelKey/descKey가 있으면 t()로 푼다 (폴백 메타용).
+  // 없으면 백엔드 메타의 언어별 필드를 쓴다.
   let { setting, value = $bindable() } = $props();
 
-  const label = $derived(setting.labelKey ? t(setting.labelKey) : setting.label);
-  const description = $derived(setting.descKey ? t(setting.descKey) : setting.description);
+  const label = $derived(setting.labelKey ? t(setting.labelKey) : metaLabel(setting));
+  const description = $derived(setting.descKey ? t(setting.descKey) : metaDesc(setting));
   const unit = $derived(setting.unitKey ? t(setting.unitKey) : setting.unit);
 
   const isInt = $derived(

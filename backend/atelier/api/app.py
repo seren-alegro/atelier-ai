@@ -43,12 +43,16 @@ def create_app() -> FastAPI:
 
     @app.get("/api/settings")
     def list_settings():
-        """설정 목록: 한국어 설명 + 추천값 포함."""
+        """설정 목록: 3개 언어(ko/en/ja) 라벨·설명 + 추천값 포함."""
         return [
             {
                 "key": s.key,
                 "label": s.label,
                 "description": s.description,
+                "label_en": s.label_en,
+                "description_en": s.description_en,
+                "label_ja": s.label_ja,
+                "description_ja": s.description_ja,
                 "recommended": s.recommended,
                 "kind": s.kind,
                 "min": s.min,
