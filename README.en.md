@@ -1,6 +1,6 @@
 # Atelier AI
 
-[한국어](README.md)
+[한국어](README.md) · [日本語](README.ja.md)
 
 A desktop tool dedicated to image generation, with an intuitive UI that beginners can use right away.
 

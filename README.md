@@ -1,6 +1,6 @@
 # Atelier AI
 
-[English](README.en.md)
+[English](README.en.md) · [日本語](README.ja.md)
 
 그림 생성 전용 데스크톱 도구. 초보자도 바로 쓸 수 있는 직관적인 UI를 지향한다.
 
