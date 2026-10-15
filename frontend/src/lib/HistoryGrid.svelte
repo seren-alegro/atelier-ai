@@ -2,23 +2,24 @@
   // 작업내역/라이브러리 공용 썸네일 그리드
   import { apiUrl } from './api.js';
   import { removeHistory, toggleFavorite } from './history.svelte.js';
+  import { t, locale } from './i18n.svelte.js';
 
   let {
     items = [],
     onLoad = null, // (params) => void — "설정 불러오기"
-    emptyText = '아직 기록이 없어요.',
+    emptyText = t('hist.empty'),
   } = $props();
 
-  const modeLabel = {
-    txt2img: '텍스트로 생성',
-    img2img: '이미지로 생성',
-    inpaint: '인페인트',
-    pose: '포즈 지정',
-  };
+  const modeLabel = (mode) => ({
+    txt2img: t('hist.modeText'),
+    img2img: t('hist.modeImg'),
+    inpaint: t('hist.modeInpaint'),
+    pose: t('hist.modePose'),
+  })[mode] ?? mode;
 
   function fmtDate(ts) {
     try {
-      return new Date(ts).toLocaleString('ko-KR', {
+      return new Date(ts).toLocaleString(locale(), {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
@@ -34,13 +35,13 @@
     const bits = [];
     if (rec.model) bits.push(rec.model);
     if (p.width && p.height) bits.push(`${p.width}×${p.height}`);
-    if (p.steps) bits.push(`${p.steps}스텝`);
+    if (p.steps) bits.push(t('common.stepsCount', { n: p.steps }));
     if (p.sampler) bits.push(p.sampler);
     return bits.join(' · ');
   }
 
   function askDelete(rec) {
-    if (confirm('이 기록을 삭제할까요? (이미지 파일은 남아 있어요)')) {
+    if (confirm(t('hist.deleteConfirm'))) {
       removeHistory(rec.id);
     }
   }
@@ -54,26 +55,26 @@
       <article class="history-card">
         <div class="thumb">
           {#if rec.results?.length}
-            <img src={apiUrl(rec.results[0])} alt="생성 결과" loading="lazy" />
+            <img src={apiUrl(rec.results[0])} alt={t('gen.galleryAlt')} loading="lazy" />
           {:else}
-            <div class="thumb-none">이미지 없음</div>
+            <div class="thumb-none">{t('hist.noImage')}</div>
           {/if}
           <button
             class="fav-btn"
             class:on={rec.favorite}
             onclick={() => toggleFavorite(rec.id)}
-            title={rec.favorite ? '즐겨찾기 해제' : '즐겨찾기'}
-            aria-label="즐겨찾기 토글"
+            title={rec.favorite ? t('hist.unfavorite') : t('hist.favorite')}
+            aria-label={t('hist.favoriteToggle')}
           >
             {rec.favorite ? '★' : '☆'}
           </button>
         </div>
         <div class="card-body">
           <p class="prompt" title={rec.params?.prompt ?? ''}>
-            {rec.params?.prompt || '(프롬프트 없음)'}
+            {rec.params?.prompt || t('hist.noPrompt')}
           </p>
           <p class="meta">
-            {modeLabel[rec.mode] ?? rec.mode} · {fmtDate(rec.timestamp)}
+            {modeLabel(rec.mode)} · {fmtDate(rec.timestamp)}
           </p>
           {#if summary(rec)}
             <p class="meta dim">{summary(rec)}</p>
@@ -81,11 +82,11 @@
           <div class="card-actions">
             {#if onLoad}
               <button class="btn small" onclick={() => onLoad(rec)}>
-                설정 불러오기
+                {t('hist.loadSettings')}
               </button>
             {/if}
             <button class="btn small ghost danger" onclick={() => askDelete(rec)}>
-              삭제
+              {t('common.delete')}
             </button>
           </div>
         </div>

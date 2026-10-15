@@ -2,6 +2,7 @@
   // 포즈 탭: 포즈맵(OpenPose 스켈레톤 PNG) 업로드 또는 사진에서 자동 추출
   // → ControlNet으로 포즈 지정 생성
   import { onMount } from 'svelte';
+  import { t } from './i18n.svelte.js';
   import { store } from './store.svelte.js';
   import TagInput from './TagInput.svelte';
   import { requestGenerate, requestPoseDetect } from './api.js';
@@ -13,7 +14,7 @@
     modelMeta()?.description?.match(/기본값\(([^)]+)\)/)?.[1]
       ?? 'xinsir/controlnet-openpose-sdxl-1.0'
   );
-  const defaultCnLabel = $derived(`기본값 사용 (${defaultCnId}, 자동 다운로드)`);
+  const defaultCnLabel = $derived(t('pose.defaultUse', { id: defaultCnId }));
 
   const cns = $derived(controlnets());
   const strengthMeta = () => store.meta.find((m) => m.key === 'controlnet_strength');
@@ -74,7 +75,7 @@
       const skeleton = await requestPoseDetect(b64);
       posemapDataUrl = 'data:image/png;base64,' + skeleton;
     } catch (err) {
-      notice = err.message || '포즈 추출 중 오류가 발생했어요.';
+      notice = err.message || t('pose.extractFail');
     } finally {
       detecting = false;
     }
@@ -90,7 +91,7 @@
       const paths = await currentJob;
       results = paths;
     } catch (e) {
-      notice = e.message || '포즈 생성 중 오류가 발생했어요.';
+      notice = e.message || t('pose.generateFail');
     } finally {
       busy = false;
       currentJob = null;
@@ -99,16 +100,16 @@
 </script>
 
 <div class="pose-tab">
-  <h2>포즈 지정</h2>
-  <p class="field-desc">OpenPose 스켈레톤 포즈맵을 올리면, 그 포즈 그대로 그림을 그려줘요.</p>
+  <h2>{t('hist.modePose')}</h2>
+  <p class="field-desc">{t('pose.desc')}</p>
 
   <div class="field">
     <div class="field-head">
-      <span class="field-label">포즈맵</span>
+      <span class="field-label">{t('pose.mapLabel')}</span>
       <div class="field-actions">
-        <button class="btn" onclick={pickFile} disabled={detecting}>포즈맵 불러오기</button>
+        <button class="btn" onclick={pickFile} disabled={detecting}>{t('pose.loadMap')}</button>
         <button class="btn" onclick={pickPhoto} disabled={detecting}>
-          {detecting ? '추출 중…' : '📷 사진에서 포즈 추출'}
+          {detecting ? t('pose.extracting') : t('pose.extract')}
         </button>
       </div>
     </div>
@@ -126,37 +127,37 @@
       onchange={onPhoto}
       style="display:none"
     />
-    <p class="field-desc">사진을 올리면 AI가 인물의 포즈를 스켈레톤으로 뽑아줘요. 첫 실행 시 포즈 모델(약 350MB)을 내려받아 시간이 걸릴 수 있어요.</p>
+    <p class="field-desc">{t('pose.photoHint')}</p>
     {#if detecting}
-      <div class="canvas-placeholder">포즈를 추출하고 있어요… (첫 실행은 모델 다운로드 중일 수 있어요)</div>
+      <div class="canvas-placeholder">{t('pose.extractingHint')}</div>
     {:else if !posemapDataUrl}
-      <div class="canvas-placeholder">포즈맵 PNG를 불러오거나 사진에서 추출하세요</div>
+      <div class="canvas-placeholder">{t('pose.mapHint')}</div>
     {:else}
       <div class="posemap-preview">
-        <img src={posemapDataUrl} alt="포즈맵 미리보기" />
+        <img src={posemapDataUrl} alt={t('pose.mapAlt')} />
       </div>
     {/if}
   </div>
 
   <div class="field">
     <div class="field-head">
-      <span class="field-label">ControlNet 모델</span>
+      <span class="field-label">{t('pose.cnLabel')}</span>
       <button class="btn tool" onclick={() => (customModel = !customModel)}>
-        {customModel ? '목록에서 선택' : '직접 입력'}
+        {customModel ? t('pose.customList') : t('pose.customInput')}
       </button>
     </div>
     {#if customModel}
       <input
         class="text-input"
         bind:value={customRef}
-        placeholder="HF repo id 또는 로컬 경로 (예: xinsir/controlnet-openpose-sdxl-1.0)"
+        placeholder={t('pose.cnPlaceholder')}
       />
     {:else}
       <select
         class="select"
         bind:value={store.values.controlnet_model}
         disabled={modelStore.loading}
-        aria-label="ControlNet 모델 선택"
+        aria-label={t('pose.cnAria')}
       >
         <option value="">{defaultCnLabel}</option>
         {#each cns as m (m.name)}
@@ -166,16 +167,16 @@
     {/if}
     <p class="field-desc">{modelMeta()?.description ?? ''}</p>
     {#if cns.length === 0 && !modelStore.loading}
-      <p class="recommended">models/controlnet/ 폴더에 .safetensors를 넣으면 여기서 고를 수 있어요.</p>
+      <p class="recommended">{t('pose.cnEmpty')}</p>
     {/if}
   </div>
 
   <div class="field">
     <div class="field-head">
-      <span class="field-label">ControlNet 강도</span>
-      <span class="recommended">추천: {strengthMeta()?.recommended ?? 0.8}</span>
+      <span class="field-label">{t('pose.strengthLabel')}</span>
+      <span class="recommended">{t('common.recommended')} {strengthMeta()?.recommended ?? 0.8}</span>
     </div>
-    <p class="field-desc">{strengthMeta()?.description ?? '포즈를 얼마나 따를지 정해요.'}</p>
+    <p class="field-desc">{strengthMeta()?.description ?? t('pose.strengthDesc')}</p>
     <div class="number-row">
       <input
         type="range"
@@ -189,14 +190,14 @@
   </div>
 
   <div class="field">
-    <div class="field-head"><span class="field-label">프롬프트</span></div>
-    <TagInput bind:value={store.values.prompt} placeholder="태그 입력 (예: 1girl, solo)" />
+    <div class="field-head"><span class="field-label">{t('inp.prompt')}</span></div>
+    <TagInput bind:value={store.values.prompt} placeholder={t('inp.promptPh')} />
   </div>
 
   <details class="field">
-    <summary class="field-label">네거티브 프롬프트</summary>
+    <summary class="field-label">{t('inp.negative')}</summary>
     <div class="neg-body">
-      <TagInput bind:value={store.values.negative_prompt} placeholder="제외할 태그 입력" />
+      <TagInput bind:value={store.values.negative_prompt} placeholder={t('gen.negativePlaceholder')} />
     </div>
   </details>
 
@@ -205,23 +206,23 @@
     onclick={onPose}
     disabled={busy || detecting || !posemapDataUrl || !store.loaded}
   >
-    {busy ? '그리는 중…' : '포즈로 생성하기'}
+    {busy ? t('common.painting') : t('pose.generate')}
   </button>
   {#if busy}
-    <button class="btn" onclick={() => currentJob?.cancel()}>취소</button>
+    <button class="btn" onclick={() => currentJob?.cancel()}>{t('common.cancel')}</button>
   {/if}
   {#if !posemapDataUrl}
-    <p class="recommended">포즈맵을 먼저 불러오세요.</p>
+    <p class="recommended">{t('pose.needMap')}</p>
   {/if}
   {#if notice}<p class="notice">{notice}</p>{/if}
 
-  <h3>결과</h3>
+  <h3>{t('common.resultsTitle')}</h3>
   {#if results.length === 0}
-    <div class="gallery-empty">아직 결과가 없어요.</div>
+    <div class="gallery-empty">{t('common.noResults')}</div>
   {:else}
     <div class="gallery">
       {#each results as src}
-        <img {src} alt="포즈 생성 결과" />
+        <img {src} alt={t('pose.resultAlt')} />
       {/each}
     </div>
   {/if}

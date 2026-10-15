@@ -1,4 +1,5 @@
 <script>
+  import { t } from './i18n.svelte.js';
   import {
     updateState,
     checkForUpdates,
@@ -15,18 +16,18 @@
 
 <div class="update-panel">
   <div class="panel-head">
-    <h2>앱 업데이트</h2>
+    <h2>{t('upd.title')}</h2>
   </div>
   {#if !isTauri()}
-    <p class="dim">업데이트 확인은 앱에서 실행할 때만 가능해요.</p>
+    <p class="dim">{t('upd.notInApp')}</p>
   {:else}
     <p class="dim">
-      현재 버전: <strong>{updateState.current || '알 수 없음'}</strong>
+      {t('upd.current')} <strong>{updateState.current || t('upd.unknown')}</strong>
     </p>
     {#if updateState.status === 'available'}
-      <p>새 버전 <strong>{updateState.availableVersion}</strong>이 있어요.</p>
+      <p>{t('upd.newPrefix')}<strong>{updateState.availableVersion}</strong>{t('upd.newSuffix')}</p>
       <button class="btn" onclick={downloadAndInstall}>
-        다운로드하고 다시 시작
+        {t('upd.download')}
       </button>
     {:else if updateState.status === 'downloading'}
       <div class="progress">
@@ -39,7 +40,7 @@
         onclick={() => checkForUpdates()}
         disabled={updateState.status === 'checking'}
       >
-        {updateState.status === 'checking' ? '확인 중…' : '업데이트 확인'}
+        {updateState.status === 'checking' ? t('upd.checking') : t('upd.check')}
       </button>
     {/if}
     {#if updateState.message && updateState.status !== 'downloading'}

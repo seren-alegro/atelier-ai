@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { t, getLang } from './lib/i18n.svelte.js';
   import { store, initStore, reconnect, checkBackendAlive } from './lib/store.svelte.js';
   import SideNav from './lib/SideNav.svelte';
   import QuickPanel from './lib/QuickPanel.svelte';
@@ -21,6 +22,11 @@
   let editTab = $state('inpaint');      // inpaint | pose
   let modelsTab = $state('manage');     // manage | train
   let libraryTab = $state('images');    // images | templates
+
+  // 언어 전환 시 <html lang> 동기화 (접근성)
+  $effect(() => {
+    document.documentElement.lang = getLang();
+  });
 
   function onNav(id) {
     nav = id;
@@ -60,32 +66,32 @@
   <div class="app-main">
     <header class="topbar">
       <div class="brand">
-        <img class="brand-logo" src="logo.png" alt="Atelier AI 로고" />
+        <img class="brand-logo" src="logo.png" alt={t('app.logoAlt')} />
         <h1>Atelier AI</h1>
-        <span class="tagline">AI로 만드는 나만의 창작공간</span>
+        <span class="tagline">{t('app.tagline')}</span>
       </div>
       <button
         class="api-badge"
         class:online={store.apiOnline}
         class:offline={store.loaded && !store.apiOnline}
         onclick={() => { if (store.loaded && !store.apiOnline) reconnect(); }}
-        title={store.loaded && !store.apiOnline ? '클릭해서 다시 연결' : ''}
+        title={store.loaded && !store.apiOnline ? t('app.reconnect') : ''}
       >
         {#if !store.loaded}
-          연결 확인 중…
+          {t('app.backendChecking')}
         {:else if store.apiOnline}
-          백엔드 연결됨
+          {t('app.backendOk')}
         {:else}
-          백엔드 없음 · 기본값 사용 중 (클릭해서 재시도)
+          {t('app.backendMissing')}
         {/if}
       </button>
       {#if updateState.status === 'available'}
         <button
           class="update-badge"
           onclick={() => onNav('settings')}
-          title="새 버전이 있어요. 클릭해서 업데이트"
+          title={t('app.updateTitle')}
         >
-          새 버전 {updateState.availableVersion} 있음
+          {t('app.updateAvailable', { v: updateState.availableVersion })}
         </button>
       {/if}
     </header>
@@ -96,7 +102,7 @@
         <div class="center-col">
           <GenerateTab onLoad={applyRecordParams} />
         </div>
-        <aside class="quick-panel" aria-label="생성 설정">
+        <aside class="quick-panel" aria-label={t('app.panelSettings')}>
           <QuickPanel />
         </aside>
       </div>
@@ -104,9 +110,9 @@
       <!-- 이미지 편집: 인페인트 / 포즈 서브탭 + 오른쪽 인스펙터 -->
       <div class="workspace">
         <div class="center-col">
-          <nav class="subtabs" aria-label="편집 도구">
-            <button class:active={editTab === 'inpaint'} onclick={() => (editTab = 'inpaint')}>인페인트</button>
-            <button class:active={editTab === 'pose'} onclick={() => (editTab = 'pose')}>포즈</button>
+          <nav class="subtabs" aria-label={t('app.editTools')}>
+            <button class:active={editTab === 'inpaint'} onclick={() => (editTab = 'inpaint')}>{t('app.editInpaint')}</button>
+            <button class:active={editTab === 'pose'} onclick={() => (editTab = 'pose')}>{t('app.editPose')}</button>
           </nav>
           {#if editTab === 'inpaint'}
             <InpaintTab />
@@ -114,7 +120,7 @@
             <PoseTab />
           {/if}
         </div>
-        <aside class="quick-panel" aria-label="생성 설정">
+        <aside class="quick-panel" aria-label={t('app.panelSettings')}>
           <QuickPanel hideHelper />
         </aside>
       </div>
@@ -122,9 +128,9 @@
       <!-- 모델 및 학습: 모델 관리 / LoRA 학습 서브탭 -->
       <div class="workspace">
         <div class="center-col">
-          <nav class="subtabs" aria-label="모델 및 학습">
-            <button class:active={modelsTab === 'manage'} onclick={() => (modelsTab = 'manage')}>모델 관리</button>
-            <button class:active={modelsTab === 'train'} onclick={() => (modelsTab = 'train')}>LoRA 학습</button>
+          <nav class="subtabs" aria-label={t('app.modelsTabs')}>
+            <button class:active={modelsTab === 'manage'} onclick={() => (modelsTab = 'manage')}>{t('app.modelsManage')}</button>
+            <button class:active={modelsTab === 'train'} onclick={() => (modelsTab = 'train')}>{t('app.modelsTrain')}</button>
           </nav>
           {#if modelsTab === 'manage'}
             <ModelsTab />
@@ -137,9 +143,9 @@
       <!-- 라이브러리: 이미지 / 템플릿 서브탭 -->
       <div class="workspace">
         <div class="center-col">
-          <nav class="subtabs" aria-label="라이브러리">
-            <button class:active={libraryTab === 'images'} onclick={() => (libraryTab = 'images')}>이미지</button>
-            <button class:active={libraryTab === 'templates'} onclick={() => (libraryTab = 'templates')}>템플릿</button>
+          <nav class="subtabs" aria-label={t('app.libraryTabs')}>
+            <button class:active={libraryTab === 'images'} onclick={() => (libraryTab = 'images')}>{t('app.libraryImages')}</button>
+            <button class:active={libraryTab === 'templates'} onclick={() => (libraryTab = 'templates')}>{t('app.libraryTemplates')}</button>
           </nav>
           {#if libraryTab === 'images'}
             <LibraryTab onLoad={applyRecordParams} />

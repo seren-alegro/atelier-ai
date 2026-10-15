@@ -1,4 +1,5 @@
 // 백엔드 API 클라이언트. API가 없으면 null을 반환하고 폴백을 사용한다.
+import { t } from './i18n.svelte.js';
 const API_BASE = 'http://127.0.0.1:8079';
 const TIMEOUT_MS = 3000;
 
@@ -44,7 +45,7 @@ export function requestGenerate(params, mode = 'txt2img', image = null, mask = n
         body: JSON.stringify(body),
       });
     } catch {
-      throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+      throw new Error(t('api.connectFail'));
     }
     if (res.status === 422) {
       const err = await res.json().catch(() => ({}));
@@ -52,7 +53,7 @@ export function requestGenerate(params, mode = 'txt2img', image = null, mask = n
       throw new Error(
         typeof detail === 'string' ? detail
         : Array.isArray(detail) ? detail.join(', ')
-        : '설정값이 올바르지 않아요.'
+        : t('api.badSettings')
       );
     }
     if (res.status === 503) {
@@ -62,35 +63,35 @@ export function requestGenerate(params, mode = 'txt2img', image = null, mask = n
       throw new Error(
         typeof detail === 'string' && detail
           ? detail
-          : '모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.'
+          : t('api.noModel')
       );
     }
     if (res.status === 413) {
-      throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
+      throw new Error(t('api.tooLarge'));
     }
-    if (!res.ok) throw new Error(`요청 실패 (HTTP ${res.status})`);
+    if (!res.ok) throw new Error(t('api.httpFail', { status: res.status }));
     const { job_id } = await res.json();
 
     // 완료까지 폴링
     const start = Date.now();
     for (;;) {
-      if (cancelled) throw new Error('취소됐어요.');
+      if (cancelled) throw new Error(t('api.cancelled'));
       if (Date.now() - start > TIMEOUT_MS) {
-        throw new Error('시간이 너무 오래 걸려 중단했어요. (30분 초과)');
+        throw new Error(t('api.timeout'));
       }
       await new Promise((r) => setTimeout(r, 1000));
       let job;
       try {
         job = await getJson(`/api/jobs/${job_id}`);
       } catch {
-        throw new Error('백엔드와의 연결이 끊겼어요.');
+        throw new Error(t('api.disconnected'));
       }
-      if (!job) throw new Error('작업 상태를 확인할 수 없어요.');
+      if (!job) throw new Error(t('api.noJob'));
       if (job.status === 'done') {
         return job.results.map((u) => API_BASE + u);
       }
       if (job.status === 'error') {
-        throw new Error(job.error || '생성 중 오류가 발생했어요.');
+        throw new Error(job.error || t('api.generateFail'));
       }
     }
   })();
@@ -121,7 +122,7 @@ export async function deleteHistory(id) {
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || '삭제에 실패했어요.');
+    throw new Error(err.detail || t('api.deleteFail'));
   }
   return await res.json();
 }
@@ -134,7 +135,7 @@ export async function toggleHistoryFavorite(id) {
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || '즐겨찾기 변경에 실패했어요.');
+    throw new Error(err.detail || t('api.favFail'));
   }
   return await res.json();
 }
@@ -157,20 +158,20 @@ export async function searchTags(q, limit = 50) {
       API_BASE + '/api/tag-search?q=' + encodeURIComponent(q) + '&limit=' + limit
     );
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+    throw new Error(t('api.connectFail'));
   }
   if (res.status === 422) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
       typeof err.detail === 'string' && err.detail
         ? err.detail
-        : '검색어를 입력해주세요.'
+        : t('api.searchEmpty')
     );
   }
   if (res.status === 503) {
-    throw new Error('태그 데이터를 불러오지 못했어요. 백엔드를 확인해주세요.');
+    throw new Error(t('api.tagDataFail'));
   }
-  if (!res.ok) throw new Error(`검색 실패 (HTTP ${res.status})`);
+  if (!res.ok) throw new Error(t('api.searchFail', { status: res.status }));
   return await res.json();
 }
 
@@ -183,7 +184,7 @@ export async function setActiveModel(name) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || '모델 전환에 실패했어요.');
+    throw new Error(err.detail || t('api.switchFail'));
   }
   return await res.json();
 }
@@ -196,7 +197,7 @@ export async function deleteModel(name) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || '삭제에 실패했어요.');
+    throw new Error(err.detail || t('api.deleteFail'));
   }
   return await res.json();
 }
@@ -227,7 +228,7 @@ export async function requestPoseDetect(imageB64) {
   if (!res.ok) {
     throw new Error(data.detail || `HTTP ${res.status}`);
   }
-  if (!data.skeleton) throw new Error('스켈레톤을 받지 못했어요.');
+  if (!data.skeleton) throw new Error(t('api.noSkeleton'));
   return data.skeleton;
 }
 
@@ -245,25 +246,25 @@ export async function requestUpscale(image, strength = 0.5) {
       body: JSON.stringify({ image, strength }),
     });
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
   if (res.status === 422) {
     throw new Error(
-      typeof data.detail === 'string' ? data.detail : '업스케일 설정값이 올바르지 않아요.'
+      typeof data.detail === 'string' ? data.detail : t('api.badUpscale')
     );
   }
   if (res.status === 503) {
     throw new Error(
       typeof data.detail === 'string' && data.detail
         ? data.detail
-        : '업스케일에는 GPU가 필요해요.'
+        : t('api.needGpuUpscale')
     );
   }
-  if (res.status === 404) throw new Error('원본 이미지를 찾을 수 없어요.');
-  if (res.status === 413) throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
-  if (!res.ok) throw new Error(data.detail || `업스케일 실패 (HTTP ${res.status})`);
-  if (!data.url) throw new Error('업스케일 결과를 받지 못했어요.');
+  if (res.status === 404) throw new Error(t('api.notFound'));
+  if (res.status === 413) throw new Error(t('api.tooLarge'));
+  if (!res.ok) throw new Error(data.detail || t('api.upscaleFail', { status: res.status }));
+  if (!data.url) throw new Error(t('api.upscaleNoResult'));
   return API_BASE + data.url;
 }
 
@@ -292,25 +293,25 @@ export async function requestAdetailer(image, opts = {}) {
       }),
     });
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
   if (res.status === 422) {
     throw new Error(
-      typeof data.detail === 'string' ? data.detail : '얼굴 보정 설정값이 올바르지 않아요.'
+      typeof data.detail === 'string' ? data.detail : t('api.badAdetailer')
     );
   }
   if (res.status === 503) {
     throw new Error(
       typeof data.detail === 'string' && data.detail
         ? data.detail
-        : '얼굴 보정에는 GPU가 필요해요.'
+        : t('api.needGpuAdetailer')
     );
   }
-  if (res.status === 404) throw new Error('원본 이미지를 찾을 수 없어요.');
-  if (res.status === 413) throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
-  if (!res.ok) throw new Error(data.detail || `얼굴 보정 실패 (HTTP ${res.status})`);
-  if (!data.url) throw new Error('얼굴 보정 결과를 받지 못했어요.');
+  if (res.status === 404) throw new Error(t('api.notFound'));
+  if (res.status === 413) throw new Error(t('api.tooLarge'));
+  if (!res.ok) throw new Error(data.detail || t('api.adetailerFail', { status: res.status }));
+  if (!data.url) throw new Error(t('api.adetailerNoResult'));
   return { url: API_BASE + data.url, faces_detected: data.faces_detected ?? 0 };
 }
 
@@ -337,25 +338,25 @@ export async function requestOutpaint(image, opts = {}) {
       }),
     });
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
   if (res.status === 422) {
     throw new Error(
-      typeof data.detail === 'string' ? data.detail : '아웃페인팅 설정값이 올바르지 않아요.'
+      typeof data.detail === 'string' ? data.detail : t('api.badOutpaint')
     );
   }
   if (res.status === 503) {
     throw new Error(
       typeof data.detail === 'string' && data.detail
         ? data.detail
-        : '아웃페인팅에는 GPU가 필요해요.'
+        : t('api.needGpuOutpaint')
     );
   }
-  if (res.status === 404) throw new Error('원본 이미지를 찾을 수 없어요.');
-  if (res.status === 413) throw new Error('이미지가 너무 커요. 더 작은 이미지를 올려주세요.');
-  if (!res.ok) throw new Error(data.detail || `아웃페인팅 실패 (HTTP ${res.status})`);
-  if (!data.url) throw new Error('아웃페인팅 결과를 받지 못했어요.');
+  if (res.status === 404) throw new Error(t('api.notFound'));
+  if (res.status === 413) throw new Error(t('api.tooLarge'));
+  if (!res.ok) throw new Error(data.detail || t('api.outpaintFail', { status: res.status }));
+  if (!data.url) throw new Error(t('api.outpaintNoResult'));
   return API_BASE + data.url;
 }
 
@@ -381,23 +382,23 @@ export async function requestXyPlot(xAxis, yAxis, baseParams, seedRule = 'fixed'
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
   const detail = typeof data.detail === 'string' ? data.detail
     : Array.isArray(data.detail) ? data.detail.join(', ')
     : null;
   if (res.status === 422) {
-    throw new Error(detail || 'X/Y 플롯 설정값이 올바르지 않아요.');
+    throw new Error(detail || t('api.badXy'));
   }
   if (res.status === 503) {
-    throw new Error(detail || '모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.');
+    throw new Error(detail || t('api.noModel'));
   }
   if (res.status === 409) {
-    throw new Error(detail || '다른 배치 작업이 실행 중이에요.');
+    throw new Error(detail || t('api.xyBusy'));
   }
-  if (!res.ok) throw new Error(detail || `X/Y 플롯 요청 실패 (HTTP ${res.status})`);
-  if (!data.job_id) throw new Error('X/Y 플롯 작업 ID를 받지 못했어요.');
+  if (!res.ok) throw new Error(detail || t('api.xyRequestFail', { status: res.status }));
+  if (!data.job_id) throw new Error(t('api.xyNoJobId'));
   return data;
 }
 
@@ -407,11 +408,11 @@ export async function getXyPlotJob(jobId) {
   try {
     res = await fetch(API_BASE + '/api/xy-plot/' + encodeURIComponent(jobId));
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
-  if (res.status === 404) throw new Error('X/Y 플롯 작업을 찾을 수 없어요.');
-  if (!res.ok) throw new Error(data.detail || `상태 조회 실패 (HTTP ${res.status})`);
+  if (res.status === 404) throw new Error(t('api.xyNotFound'));
+  if (!res.ok) throw new Error(data.detail || t('api.statusFail', { status: res.status }));
   return data;
 }
 
@@ -423,11 +424,11 @@ export async function cancelXyPlotJob(jobId) {
       method: 'DELETE',
     });
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
-  if (res.status === 404) throw new Error('X/Y 플롯 작업을 찾을 수 없어요.');
-  if (!res.ok) throw new Error(data.detail || `취소 실패 (HTTP ${res.status})`);
+  if (res.status === 404) throw new Error(t('api.xyNotFound'));
+  if (!res.ok) throw new Error(data.detail || t('api.cancelFail', { status: res.status }));
   return data;
 }
 
@@ -447,23 +448,23 @@ export async function requestBatch(prompts, params) {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
   const detail = typeof data.detail === 'string' ? data.detail
     : Array.isArray(data.detail) ? data.detail.join(', ')
     : null;
   if (res.status === 422) {
-    throw new Error(detail || '배치 설정값이 올바르지 않아요.');
+    throw new Error(detail || t('api.badBatch'));
   }
   if (res.status === 503) {
-    throw new Error(detail || '모델이 로드되지 않았어요. 백엔드에서 모델 경로를 설정해주세요.');
+    throw new Error(detail || t('api.noModel'));
   }
   if (res.status === 409) {
-    throw new Error(detail || '다른 배치 작업이 실행 중이에요.');
+    throw new Error(detail || t('api.xyBusy'));
   }
-  if (!res.ok) throw new Error(detail || `배치 요청 실패 (HTTP ${res.status})`);
-  if (!data.job_id) throw new Error('배치 작업 ID를 받지 못했어요.');
+  if (!res.ok) throw new Error(detail || t('api.batchRequestFail', { status: res.status }));
+  if (!data.job_id) throw new Error(t('api.batchNoJobId'));
   return data;
 }
 
@@ -473,11 +474,11 @@ export async function getBatchJob(jobId) {
   try {
     res = await fetch(API_BASE + '/api/batch/' + encodeURIComponent(jobId));
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
-  if (res.status === 404) throw new Error('배치 작업을 찾을 수 없어요.');
-  if (!res.ok) throw new Error(data.detail || `상태 조회 실패 (HTTP ${res.status})`);
+  if (res.status === 404) throw new Error(t('api.batchNotFound'));
+  if (!res.ok) throw new Error(data.detail || t('api.statusFail', { status: res.status }));
   return data;
 }
 
@@ -489,11 +490,11 @@ export async function cancelBatchJob(jobId) {
       method: 'DELETE',
     });
   } catch {
-    throw new Error('백엔드에 연결할 수 없어요.');
+    throw new Error(t('api.connectFail'));
   }
   const data = await res.json().catch(() => ({}));
-  if (res.status === 404) throw new Error('배치 작업을 찾을 수 없어요.');
-  if (!res.ok) throw new Error(data.detail || `취소 실패 (HTTP ${res.status})`);
+  if (res.status === 404) throw new Error(t('api.batchNotFound'));
+  if (!res.ok) throw new Error(data.detail || t('api.cancelFail', { status: res.status }));
   return data;
 }
 

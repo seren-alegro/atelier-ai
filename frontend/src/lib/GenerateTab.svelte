@@ -4,6 +4,7 @@
   import { historyStore, loadHistory } from './history.svelte.js';
   import TagInput from './TagInput.svelte';
   import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestOutpaint, requestXyPlot, getXyPlotJob, cancelXyPlotJob, apiUrl } from './api.js';
+  import { t } from './i18n.svelte.js';
 
   let { onLoad = null } = $props();
 
@@ -29,18 +30,18 @@
   const batchCount = $derived(
     batchText.split('\n').map((s) => s.trim()).filter(Boolean).length
   );
-  const batchStatusLabel = {
-    queued: '대기중', running: '생성중…', done: '완료',
-    error: '실패', cancelled: '취소됨',
-  };
+  const batchStatusLabel = $derived({
+    queued: t('gen.statusQueued'), running: t('gen.statusRunning'), done: t('gen.statusDone'),
+    error: t('gen.statusError'), cancelled: t('gen.statusCancelled'),
+  });
 
   // X/Y 플롯
-  const XY_TYPES = [
-    { value: 'sampler', label: '샘플러' },
-    { value: 'cfg_scale', label: 'CFG 스케일' },
-    { value: 'steps', label: '스텝 수' },
-    { value: 'seed', label: '시드' },
-  ];
+  const XY_TYPES = $derived([
+    { value: 'sampler', label: t('gen.xySampler') },
+    { value: 'cfg_scale', label: t('gen.xyCfg') },
+    { value: 'steps', label: t('gen.xySteps') },
+    { value: 'seed', label: t('gen.xySeed') },
+  ]);
   let xyXType = $state('cfg_scale');
   let xyXValues = $state('3, 5, 7');
   let xyYType = $state('steps');
@@ -61,12 +62,12 @@
     const xAxis = { type: xyXType, values: parseXyValues(xyXValues, xyXType) };
     const yAxis = xyUseY ? { type: xyYType, values: parseXyValues(xyYValues, xyYType) } : null;
     if (xAxis.values.length === 0 || (xyUseY && yAxis.values.length === 0)) {
-      xyNotice = '축 값을 쉼표로 구분해 하나 이상 입력해주세요.';
+      xyNotice = t('gen.xyNoValues');
       return;
     }
     if (xAxis.values.some((v) => typeof v === 'number' && Number.isNaN(v))
         || (xyUseY && yAxis.values.some((v) => typeof v === 'number' && Number.isNaN(v)))) {
-      xyNotice = '숫자 축에는 숫자만 입력해주세요.';
+      xyNotice = t('gen.xyNumOnly');
       return;
     }
     xyNotice = '';
@@ -91,7 +92,7 @@
             return;
           }
         } catch (e) {
-          xyNotice = e.message || 'X/Y 플롯 상태를 확인할 수 없어요.';
+          xyNotice = e.message || t('gen.xyStatusFail');
           xyBusy = false;
           xyTimer = null;
           return;
@@ -100,7 +101,7 @@
       };
       poll();
     } catch (e) {
-      xyNotice = e.message || 'X/Y 플롯 시작 중 오류가 발생했어요.';
+      xyNotice = e.message || t('gen.xyStartFail');
       xyBusy = false;
     }
   }
@@ -110,7 +111,7 @@
     try {
       xyJob = await cancelXyPlotJob(xyJob.job_id);
     } catch (e) {
-      xyNotice = e.message || 'X/Y 플롯 취소 중 오류가 발생했어요.';
+      xyNotice = e.message || t('gen.xyCancelFail');
     }
   }
 
@@ -134,7 +135,7 @@
       results = [...results, url];
       outpaintForm = null;
     } catch (e) {
-      notice = e.message || '아웃페인팅 중 오류가 발생했어요.';
+      notice = e.message || t('gen.outpaintFail');
     } finally {
       delete outpainting[src];
     }
@@ -162,7 +163,7 @@
       const paths = await currentJob;
       results = paths;
     } catch (e) {
-      notice = e.message || '생성 중 오류가 발생했어요.';
+      notice = e.message || t('gen.generateFail');
     } finally {
       busy = false;
       currentJob = null;
@@ -185,7 +186,7 @@
       const url = await requestUpscale(name, strength);
       results = [...results, url];
     } catch (e) {
-      notice = e.message || '업스케일 중 오류가 발생했어요.';
+      notice = e.message || t('gen.upscaleFail');
     } finally {
       delete upscaling[src];
     }
@@ -205,10 +206,10 @@
       if (faces_detected > 0) {
         results = [...results, url];
       } else {
-        notice = '얼굴을 찾지 못했어요. 원본 그대로예요.';
+        notice = t('gen.noFace');
       }
     } catch (e) {
-      notice = e.message || '얼굴 보정 중 오류가 발생했어요.';
+      notice = e.message || t('gen.retouchFail');
     } finally {
       delete retouching[src];
     }
@@ -217,7 +218,7 @@
   async function onBatchStart() {
     const prompts = batchText.split('\n').map((s) => s.trim()).filter(Boolean);
     if (prompts.length === 0) {
-      batchNotice = '프롬프트를 한 줄에 하나씩 입력해주세요.';
+      batchNotice = t('gen.batchNeedPrompts');
       return;
     }
     batchNotice = '';
@@ -229,7 +230,7 @@
       batchTimer = setInterval(() => pollBatch(job_id), 1500);
       await pollBatch(job_id);
     } catch (e) {
-      batchNotice = e.message || '배치 시작 중 오류가 발생했어요.';
+      batchNotice = e.message || t('gen.batchStartFail');
       batchBusy = false;
     }
   }
@@ -255,7 +256,7 @@
         batchBusy = false;
       }
     } catch (e) {
-      batchNotice = e.message || '배치 상태를 확인할 수 없어요.';
+      batchNotice = e.message || t('gen.batchStatusFail');
       if (batchTimer) { clearInterval(batchTimer); batchTimer = null; }
       batchBusy = false;
     }
@@ -266,7 +267,7 @@
     try {
       batchJob = await cancelBatchJob(batchJob.job_id);
     } catch (e) {
-      batchNotice = e.message || '배치 취소 중 오류가 발생했어요.';
+      batchNotice = e.message || t('gen.batchCancelFail');
     }
   }
 </script>
@@ -274,54 +275,51 @@
 <div class="generate-tab">
   <div class="prompt-card">
     <div class="field-head">
-      <span class="field-label">✦ 프롬프트</span>
+      <span class="field-label">{t('gen.promptTitle')}</span>
     </div>
     <TagInput
       bind:value={store.values.prompt}
-      placeholder="태그 입력 (예: 1girl, solo) — 입력 중 자동완성이 떠요"
+      placeholder={t('gen.promptPlaceholder')}
     />
 
     <details class="neg">
-      <summary class="field-label">네거티브 프롬프트</summary>
+      <summary class="field-label">{t('gen.negativeTitle')}</summary>
       <div class="neg-body">
-        <TagInput bind:value={store.values.negative_prompt} placeholder="제외할 태그 입력" />
+        <TagInput bind:value={store.values.negative_prompt} placeholder={t('gen.negativePlaceholder')} />
       </div>
     </details>
 
     <div class="btn-row">
       <button class="btn primary cta" onclick={onGenerate} disabled={busy || batchBusy || !store.loaded}>
-        {busy ? '생성 중…' : '✦ 그림 생성하기 →'}
+        {busy ? t('gen.generating') : t('gen.generate')}
       </button>
       {#if busy}
-        <button class="btn" onclick={() => currentJob?.cancel()}>취소</button>
+        <button class="btn" onclick={() => currentJob?.cancel()}>{t('common.cancel')}</button>
       {/if}
     </div>
     {#if notice}<p class="notice">{notice}</p>{/if}
 
     <details class="batch">
-      <summary class="field-label">📋 배치 생성 (여러 프롬프트 한 번에)</summary>
+      <summary class="field-label">{t('gen.batchTitle')}</summary>
       <div class="batch-body">
         <textarea
           class="batch-text"
           rows="6"
           bind:value={batchText}
-          placeholder={'한 줄에 프롬프트 하나씩 입력\n예)\n1girl, solo, red dress, smile\n1girl, solo, blue kimono, night'}
+          placeholder={t('gen.batchPlaceholder')}
           disabled={batchBusy}
         ></textarea>
-        <p class="batch-hint">
-          우측 패널의 설정(모델·해상도·샘플러·CFG·스텝·시드)을 공통으로 사용해요.
-          시드가 고정돼 있으면 항목마다 1씩 증가하고, 랜덤이면 매번 새로 뽑아요.
-        </p>
+        <p class="batch-hint">{t('gen.batchHint')}</p>
         <div class="btn-row">
           <button
             class="btn primary"
             onclick={onBatchStart}
             disabled={batchBusy || busy || batchCount === 0 || !store.loaded}
           >
-            {batchBusy ? '배치 실행 중…' : `📋 배치 시작 (${batchCount}개)`}
+            {batchBusy ? t('gen.batchRunning') : t('gen.batchStart', { count: batchCount })}
           </button>
           {#if batchBusy}
-            <button class="btn" onclick={onBatchCancel}>배치 취소</button>
+            <button class="btn" onclick={onBatchCancel}>{t('gen.batchCancel')}</button>
           {/if}
         </div>
         {#if batchNotice}<p class="notice">{batchNotice}</p>{/if}
@@ -342,7 +340,7 @@
                 <span class="batch-item-status">{batchStatusLabel[item.status] ?? item.status}</span>
                 <span class="batch-item-prompt" title={item.prompt}>{item.prompt}</span>
                 {#if item.status === 'done' && item.url}
-                  <img class="batch-item-thumb" src={apiUrl(item.url)} alt="배치 결과" loading="lazy" />
+                  <img class="batch-item-thumb" src={apiUrl(item.url)} alt={t('gen.batchThumbAlt')} loading="lazy" />
                 {/if}
                 {#if item.status === 'error' && item.error}
                   <span class="batch-item-error" title={item.error}>⚠</span>
@@ -355,11 +353,11 @@
     </details>
 
     <details class="batch">
-      <summary class="field-label">📊 X/Y 플롯 (설정 비교 그리드)</summary>
+      <summary class="field-label">{t('gen.xyTitle')}</summary>
       <div class="batch-body">
         <div class="xy-row">
           <label class="xy-axis">
-            <span class="xy-label">X축</span>
+            <span class="xy-label">{t('gen.axisX')}</span>
             <select class="select" bind:value={xyXType} disabled={xyBusy}>
               {#each XY_TYPES as t (t.value)}
                 <option value={t.value}>{t.label}</option>
@@ -368,20 +366,20 @@
             <input
               class="text-input"
               bind:value={xyXValues}
-              placeholder="쉼표로 구분 (예: 3, 5, 7)"
+              placeholder={t('gen.xyXPlaceholder')}
               disabled={xyBusy}
-              aria-label="X축 값"
+              aria-label={t('gen.xyXValuesAria')}
             />
           </label>
         </div>
         <div class="xy-row">
           <label class="xy-check">
             <input type="checkbox" bind:checked={xyUseY} disabled={xyBusy} />
-            <span>Y축 사용</span>
+            <span>{t('gen.xyUseY')}</span>
           </label>
           {#if xyUseY}
             <label class="xy-axis">
-              <span class="xy-label">Y축</span>
+              <span class="xy-label">{t('gen.axisY')}</span>
               <select class="select" bind:value={xyYType} disabled={xyBusy}>
                 {#each XY_TYPES as t (t.value)}
                   <option value={t.value}>{t.label}</option>
@@ -390,27 +388,24 @@
               <input
                 class="text-input"
                 bind:value={xyYValues}
-                placeholder="쉼표로 구분 (예: 20, 30)"
+                placeholder={t('gen.xyYPlaceholder')}
                 disabled={xyBusy}
-                aria-label="Y축 값"
+                aria-label={t('gen.xyYValuesAria')}
               />
             </label>
           {/if}
         </div>
-        <p class="batch-hint">
-          한 번에 최대 36칸까지. 시드는 기본으로 모든 칸에 고정돼서 공정하게 비교돼요
-          (우측 패널 시드 사용, 랜덤이면 하나 뽑아 공유).
-        </p>
+        <p class="batch-hint">{t('gen.xyHint')}</p>
         <div class="btn-row">
           <button
             class="btn primary"
             onclick={onXyStart}
             disabled={xyBusy || busy || batchBusy || !store.loaded}
           >
-            {xyBusy ? 'X/Y 플롯 실행 중…' : '📊 X/Y 플롯 시작'}
+            {xyBusy ? t('gen.xyRunning') : t('gen.xyStart')}
           </button>
           {#if xyBusy}
-            <button class="btn" onclick={onXyCancel}>취소</button>
+            <button class="btn" onclick={onXyCancel}>{t('common.cancel')}</button>
           {/if}
         </div>
         {#if xyNotice}<p class="notice">{xyNotice}</p>{/if}
@@ -442,7 +437,7 @@
                             onclick={() => { results = [...results, apiUrl(cell.url)]; }}
                             title={cell.label ?? ''}
                           >
-                            <img src={apiUrl(cell.url)} alt={cell.label ?? '플롯 결과'} loading="lazy" />
+                            <img src={apiUrl(cell.url)} alt={cell.label ?? t('gen.xyCellAlt')} loading="lazy" />
                           </button>
                         {:else}
                           <span class="xy-cell-status">{batchStatusLabel[cell?.status] ?? '…'}</span>
@@ -454,7 +449,7 @@
               </tbody>
             </table>
           </div>
-          <p class="batch-hint">칸을 누르면 갤러리에 크게 추가돼요.</p>
+          <p class="batch-hint">{t('gen.xyCellHint')}</p>
         {/if}
       </div>
     </details>
@@ -463,58 +458,58 @@
   <div class="canvas" class:has-results={results.length > 0}>
     {#if results.length === 0}
       {#if recentLoaded && recents.length > 0}
-        <p class="canvas-title">최근 작업 — 클릭하면 설정을 불러와요</p>
+        <p class="canvas-title">{t('gen.recentTitle')}</p>
         <div class="recent-grid">
           {#each recents as rec (rec.id)}
             <button
               class="recent-thumb"
               onclick={() => onRecentClick(rec)}
-              title="이 설정으로 불러오기"
+              title={t('hist.loadSettings')}
             >
-              <img src={apiUrl(rec.results[0])} alt="최근 생성 결과" loading="lazy" />
+              <img src={apiUrl(rec.results[0])} alt={t('gen.recentAlt')} loading="lazy" />
             </button>
           {/each}
         </div>
       {:else}
         <div class="canvas-empty">
           <div class="canvas-empty-icon">🖼</div>
-          <p>아직 생성된 그림이 없어요.<br />위 프롬프트를 입력하고 생성 버튼을 눌러보세요.</p>
+          <p>{t('gen.empty1')}<br />{t('gen.empty2')}</p>
         </div>
       {/if}
     {:else}
       <div class="gallery">
         {#each results as src (src)}
           <figure class="gallery-item">
-            <img {src} alt="생성 결과" />
+            <img {src} alt={t('gen.galleryAlt')} />
             <button
               class="btn upscale-btn"
               onclick={() => onUpscale(src)}
               disabled={!!upscaling[src]}
-              title="RealESRGAN으로 4배 키우기 (강도는 우측 패널의 '업스케일 강도')"
+              title={t('gen.upscaleTitle')}
             >
-              {upscaling[src] ? '업스케일 중…' : '🔍 업스케일'}
+              {upscaling[src] ? t('gen.upscaling') : t('gen.upscale')}
             </button>
             <button
               class="btn retouch-btn"
               onclick={() => onRetouch(src)}
               disabled={!!retouching[src]}
-              title="얼굴을 자동 검출해 해당 영역만 다시 그리기 (ADetailer 방식)"
+              title={t('gen.retouchTitle')}
             >
-              {retouching[src] ? '보정 중…' : '✨ 얼굴 보정'}
+              {retouching[src] ? t('gen.retouching') : t('gen.retouch')}
             </button>
             <button
               class="btn outpaint-btn"
               onclick={() => { outpaintForm = outpaintForm === src ? null : src; }}
               disabled={!!outpainting[src]}
-              title="캔버스를 넓히고 새 영역을 AI로 채우기"
+              title={t('gen.outpaintTitle')}
             >
-              {outpainting[src] ? '확장 중…' : '🖼️ 확장'}
+              {outpainting[src] ? t('gen.outpainting') : t('gen.outpaint')}
             </button>
             {#if outpaintForm === src}
               <div class="outpaint-form">
-                {#each [['up', '위'], ['down', '아래'], ['left', '왼쪽'], ['right', '오른쪽']] as [k, label]}
+                {#each [['up', 'gen.dirUp'], ['down', 'gen.dirDown'], ['left', 'gen.dirLeft'], ['right', 'gen.dirRight']] as [k, labelKey]}
                   <label class="outpaint-field">
-                    <span>{label}</span>
+                    <span>{t(labelKey)}</span>
                     <input
                       type="number"
                       class="number-box"
@@ -522,17 +517,17 @@
                       max="512"
                       step="64"
                       bind:value={outpaintExpand[k]}
-                      aria-label="확장 {label} (px)"
+                      aria-label={t('gen.expandAria', { label: t(labelKey) })}
                     />
                   </label>
                 {/each}
-                <p class="hint">각 방향 64~512px. 새 영역만 다시 그려요.</p>
+                <p class="hint">{t('gen.expandHint')}</p>
                 <button
                   class="btn primary"
                   onclick={() => onOutpaint(src)}
                   disabled={!!outpainting[src]}
                 >
-                  확장 시작
+                  {t('gen.expandStart')}
                 </button>
               </div>
             {/if}

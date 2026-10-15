@@ -1,5 +1,6 @@
 // 모델 목록 공유 스토어 (QuickPanel의 모델 선택 + ModelsTab에서 함께 사용)
 import { fetchModels, setActiveModel, deleteModel, refreshModels } from './api.js';
+import { t } from './i18n.svelte.js';
 
 export const modelStore = $state({
   data: null, // {models_dir, active, models: [{name, kind, size_mb, ...}]}
@@ -14,7 +15,7 @@ export async function loadModels() {
   const res = await fetchModels();
   modelStore.loading = false;
   if (!res) {
-    modelStore.notice = '백엔드에 연결되지 않았어요. 백엔드를 먼저 실행해주세요.';
+    modelStore.notice = t('mdl.offline');
     modelStore.data = null;
     return;
   }
@@ -30,7 +31,7 @@ export async function rescanModels() {
   if (res) {
     modelStore.data = res;
   } else {
-    modelStore.notice = '새로고침에 실패했어요.';
+    modelStore.notice = t('mdl.refreshFail');
   }
 }
 
@@ -44,7 +45,7 @@ export async function activateModel(name) {
       modelStore.data = { ...modelStore.data, active: res.active };
     }
   } catch (e) {
-    modelStore.notice = e.message || '모델 전환에 실패했어요.';
+    modelStore.notice = e.message || t('mdl.switchFail');
   } finally {
     modelStore.loading = false;
   }
@@ -58,9 +59,9 @@ export async function removeModel(name) {
     await deleteModel(name);
     const res = await fetchModels();
     modelStore.data = res;
-    if (!res) modelStore.notice = '목록을 다시 불러오지 못했어요.';
+    if (!res) modelStore.notice = t('mdl.reloadFail');
   } catch (e) {
-    modelStore.notice = e.message || '삭제에 실패했어요.';
+    modelStore.notice = e.message || t('mdl.deleteFail');
   } finally {
     modelStore.loading = false;
   }

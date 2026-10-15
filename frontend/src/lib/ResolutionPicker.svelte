@@ -1,8 +1,9 @@
 <script>
   // 해상도 선택: 그룹별 프리셋 + 커스텀 슬라이더 (최대 2048)
   import { store } from './store.svelte.js';
+  import { t } from './i18n.svelte.js';
 
-  const GROUPS = [
+  const GROUPS = $derived([
     {
       id: 'square',
       name: 'Square',
@@ -34,7 +35,7 @@
     },
     {
       id: 'lab',
-      name: '실험실',
+      name: t('res.lab'),
       presets: [
         { name: 'Square', w: 1024, h: 1024 },
         { name: 'Portrait', w: 896, h: 1152 },
@@ -46,7 +47,7 @@
         { name: 'Extended Portrait', w: 640, h: 1536 },
       ],
     },
-  ];
+  ]);
 
   let groupId = $state('portrait');
   const group = $derived(GROUPS.find((g) => g.id === groupId) ?? GROUPS[1]);
@@ -79,7 +80,7 @@
 </script>
 
 <div class="res-picker">
-  <div class="res-groups" role="tablist" aria-label="해상도 그룹">
+  <div class="res-groups" role="tablist" aria-label={t('res.groupAria')}>
     {#each GROUPS as g (g.id)}
       <button
         class="res-group-btn"
@@ -87,7 +88,7 @@
         onclick={() => { groupId = g.id; }}
         role="tab"
       >
-        {g.name}{g.basic ? ' · 기본' : ''}
+        {g.name}{g.basic ? t('res.basicTag') : ''}
       </button>
     {/each}
     <button
@@ -96,32 +97,32 @@
       onclick={() => { groupId = 'custom'; }}
       role="tab"
     >
-      커스텀
+      {t('res.custom')}
     </button>
   </div>
 
   {#if groupId === 'custom'}
     <div class="res-custom">
       <label class="res-slider">
-        <span class="res-slider-head"><span>가로</span><b>{store.values.width}px</b></span>
+        <span class="res-slider-head"><span>{t('res.width')}</span><b>{store.values.width}px</b></span>
         <input
           type="range" min="256" max="2048" step="64"
           bind:value={store.values.width}
           oninput={onCustomInput}
-          aria-label="가로 해상도"
+          aria-label={t('res.widthAria')}
         />
       </label>
       <label class="res-slider">
-        <span class="res-slider-head"><span>세로</span><b>{store.values.height}px</b></span>
+        <span class="res-slider-head"><span>{t('res.height')}</span><b>{store.values.height}px</b></span>
         <input
           type="range" min="256" max="2048" step="64"
           bind:value={store.values.height}
           oninput={onCustomInput}
-          aria-label="세로 해상도"
+          aria-label={t('res.heightAria')}
         />
       </label>
-      <p class="res-ratio">화면 비율 <b>{ratio}</b></p>
-      <p class="res-hint">최대 2048px까지. 클수록 VRAM을 많이 써요.</p>
+      <p class="res-ratio">{t('res.aspect')} <b>{ratio}</b></p>
+      <p class="res-hint">{t('res.hint')}</p>
     </div>
   {:else}
     <div class="seg-grid">

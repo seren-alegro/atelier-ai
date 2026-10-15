@@ -1,4 +1,5 @@
 // 작업내역 공유 스토어 (작업내역 탭 + 라이브러리 탭에서 함께 사용)
+import { t } from './i18n.svelte.js';
 import {
   fetchHistory,
   deleteHistory,
@@ -20,7 +21,7 @@ export async function loadHistory(limit = 100) {
   historyStore.loading = false;
   if (!items) {
     historyStore.offline = true;
-    historyStore.notice = '백엔드에 연결되지 않았어요. 백엔드를 먼저 실행해주세요.';
+    historyStore.notice = t('hist.offlineBackend');
     return;
   }
   historyStore.offline = false;
@@ -34,7 +35,7 @@ export async function removeHistory(id) {
     await deleteHistory(id);
     historyStore.items = historyStore.items.filter((r) => r.id !== id);
   } catch (e) {
-    historyStore.notice = e.message || '삭제에 실패했어요.';
+    historyStore.notice = e.message || t('hist.deleteFail');
   }
 }
 
@@ -46,7 +47,7 @@ export async function toggleFavorite(id) {
     const item = historyStore.items.find((r) => r.id === id);
     if (item) item.favorite = res.favorite;
   } catch (e) {
-    historyStore.notice = e.message || '즐겨찾기 변경에 실패했어요.';
+    historyStore.notice = e.message || t('hist.favFail');
   }
 }
 

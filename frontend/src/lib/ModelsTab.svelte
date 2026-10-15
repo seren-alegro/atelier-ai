@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { t } from './i18n.svelte.js';
   import { store } from './store.svelte.js';
   import {
     modelStore,
@@ -37,7 +38,7 @@
   }
 
   function onDelete(name) {
-    if (!confirm(`'${name}'을(를) 삭제할까요? 되돌릴 수 없어요.`)) return;
+    if (!confirm(t('mdl.deleteConfirm', { name }))) return;
     removeModel(name);
   }
 
@@ -54,9 +55,9 @@
 
 <div class="models-tab">
   <div class="models-head">
-    <h3>모델 매니저</h3>
+    <h3>{t('mdl.title')}</h3>
     <button class="btn" onclick={onRefresh} disabled={modelStore.loading}>
-      {modelStore.loading ? '처리 중…' : '새로고침'}
+      {modelStore.loading ? t('mdl.processing') : t('common.refresh')}
     </button>
   </div>
   {#if modelStore.notice}<p class="notice">{modelStore.notice}</p>{/if}
@@ -64,14 +65,14 @@
   {#if modelStore.data}
     {#if cps.length === 0 && lrs.length === 0}
       <div class="gallery-empty">
-        모델이 하나도 없어요.<br />
-        체크포인트(.safetensors / .ckpt)를 아래 폴더에 넣어주세요.<br />
+        {t('mdl.empty')}<br />
+        {t('mdl.emptyHint')}<br />
         <code>{modelStore.data.models_dir}</code>
       </div>
     {:else}
-      <h4>체크포인트 ({cps.length})</h4>
+      <h4>{t('mdl.ckptTitle', { count: cps.length })}</h4>
       {#if cps.length === 0}
-        <p class="hint">체크포인트가 없어요.</p>
+        <p class="hint">{t('mdl.ckptEmpty')}</p>
       {/if}
       <ul class="model-list">
         {#each cps as m (m.name)}
@@ -87,25 +88,25 @@
               <span class="model-name">{m.name}</span>
               <span class="model-meta">{fmtSize(m.size_mb)}</span>
               {#if modelStore.data.active === m.name}
-                <span class="badge">사용 중</span>
+                <span class="badge">{t('mdl.active')}</span>
               {/if}
             </label>
             <button
               class="btn danger small"
               onclick={() => onDelete(m.name)}
               disabled={modelStore.loading || modelStore.data.active === m.name}
-              title={modelStore.data.active === m.name ? '사용 중인 모델은 삭제할 수 없어요' : '삭제'}
+              title={modelStore.data.active === m.name ? t('mdl.activeDeleteTitle') : t('common.delete')}
             >
-              삭제
+              {t('common.delete')}
             </button>
           </li>
         {/each}
       </ul>
 
-      <h4>LoRA ({lrs.length})</h4>
+      <h4>{t('mdl.loraTitle', { count: lrs.length })}</h4>
       {#if lrs.length === 0}
         <p class="hint">
-          LoRA가 없어요. <code>lora/</code> 폴더에 넣으면 여기서 보여요.
+          {t('mdl.loraEmpty')} <code>lora/</code> {t('mdl.putFolderHere')}
         </p>
       {/if}
       <ul class="model-list">
@@ -118,7 +119,7 @@
               <span class="model-meta">{fmtSize(m.size_mb)}</span>
             </label>
             <div class="lora-strength">
-              <span class="hint">강도</span>
+              <span class="hint">{t('mdl.strength')}</span>
               <input
                 type="range"
                 min="0"
@@ -134,21 +135,21 @@
               onclick={() => onDelete(m.name)}
               disabled={modelStore.loading}
             >
-              삭제
+              {t('common.delete')}
             </button>
           </li>
         {/each}
       </ul>
       {#if lrs.length > 0}
         <p class="hint">
-          활성화한 LoRA는 생성 시 함께 전달돼요. (파이프라인 적용은 준비 중)
+          {t('mdl.loraHint')}
         </p>
       {/if}
 
-      <h4>ControlNet ({cns.length})</h4>
+      <h4>{t('mdl.cnTitle', { count: cns.length })}</h4>
       {#if cns.length === 0}
         <p class="hint">
-          ControlNet이 없어요. <code>controlnet/</code> 폴더에 .safetensors를 넣으면 여기서 보여요.
+          {t('mdl.cnEmpty')} <code>controlnet/</code> {t('mdl.putSafetensors')}
         </p>
       {/if}
       <ul class="model-list">
@@ -161,7 +162,7 @@
               onclick={() => onDelete(m.name)}
               disabled={modelStore.loading}
             >
-              삭제
+              {t('common.delete')}
             </button>
           </li>
         {/each}

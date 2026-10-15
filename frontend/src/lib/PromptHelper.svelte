@@ -2,24 +2,25 @@
   // 프롬프트 도우미: 태그 칩을 누르면 프롬프트에 추가
   import { store } from './store.svelte.js';
   import { searchTags } from './api.js';
+  import { t, locale } from './i18n.svelte.js';
 
-  const GROUPS = [
+  const GROUPS = $derived([
     {
       id: 'tags',
-      label: '추천 태그',
+      label: t('help.tabTags'),
       tags: ['1girl', 'solo', 'highres', 'best quality', 'masterpiece', 'detailed eyes', 'soft lighting', 'anime style'],
     },
     {
       id: 'style',
-      label: '스타일',
+      label: t('help.tabStyle'),
       tags: ['anime screencap', 'watercolor', 'cel shaded', 'soft shading', 'vibrant colors'],
     },
     {
       id: 'pose',
-      label: '구도',
+      label: t('help.tabPose'),
       tags: ['portrait', 'upper body', 'full body', 'close-up', 'dynamic pose', 'looking at viewer'],
     },
-  ];
+  ]);
 
   let groupId = $state('tags');
   const group = $derived(GROUPS.find((g) => g.id === groupId) ?? GROUPS[0]);
@@ -68,9 +69,9 @@
       const data = await searchTags(q, 50);
       searchResults = data.results ?? [];
       searchTotal = data.count ?? 0;
-      if (searchResults.length === 0) searchNotice = '검색 결과가 없어요. 다른 단어로 해보세요.';
+      if (searchResults.length === 0) searchNotice = t('help.noResults');
     } catch (e) {
-      searchNotice = e.message || '검색 중 오류가 발생했어요.';
+      searchNotice = e.message || t('help.searchError');
       searchResults = [];
     } finally {
       searchBusy = false;
@@ -78,12 +79,12 @@
   }
 
   function fmtCount(n) {
-    return Number(n || 0).toLocaleString('ko-KR');
+    return Number(n || 0).toLocaleString(locale());
   }
 </script>
 
 <details class="qp-section qp-details" open>
-  <summary class="qp-title">✦ 프롬프트 도우미</summary>
+  <summary class="qp-title">{t('help.title')}</summary>
   <div class="helper-tabs">
     {#each GROUPS as g (g.id)}
       <button
@@ -97,7 +98,7 @@
       class:active={'search' === groupId}
       onclick={() => (groupId = 'search')}
     >
-      🔍 검색
+      {t('help.tabSearch')}
     </button>
   </div>
 
@@ -106,17 +107,17 @@
       <input
         class="search-input"
         type="text"
-        placeholder="태그나 한국어 설명으로 검색 (예: 파란눈, twintails)"
+        placeholder={t('help.searchPh')}
         value={searchQuery}
         oninput={onSearchInput}
-        aria-label="태그 검색"
+        aria-label={t('help.searchAria')}
       />
       {#if searchBusy}
-        <p class="hint">검색 중이에요…</p>
+        <p class="hint">{t('help.searching')}</p>
       {:else if searchNotice}
         <p class="hint">{searchNotice}</p>
       {:else if searchResults.length > 0}
-        <p class="hint">{fmtCount(searchTotal)}개 중 {searchResults.length}개</p>
+        <p class="hint">{t('help.resultsOf', { total: fmtCount(searchTotal), shown: searchResults.length })}</p>
         <div class="search-results">
           {#each searchResults as r (r.tag)}
             {@const added = promptTags().includes(r.tag)}
@@ -124,18 +125,18 @@
               class="search-row"
               class:added
               onclick={() => addTag(r.tag)}
-              title="프롬프트에 추가"
+              title={t('help.addTitle')}
             >
               <span class="search-tag">{added ? '✓ ' : '+ '}{r.tag}</span>
               {#if r.desc_ko}
                 <span class="search-desc">{r.desc_ko}</span>
               {/if}
-              <span class="search-count">{fmtCount(r.count)}회</span>
+              <span class="search-count">{t('help.times', { n: fmtCount(r.count) })}</span>
             </button>
           {/each}
         </div>
       {:else}
-        <p class="hint">한글·영어 모두 검색돼요. 작가·작품·캐릭터 태그는 제외돼 있어요.</p>
+        <p class="hint">{t('help.hint')}</p>
       {/if}
     </div>
   {:else}
@@ -146,13 +147,13 @@
           class="tag-chip"
           class:added
           onclick={() => addTag(tag)}
-          title="프롬프트에 추가"
+          title={t('help.addTitle')}
         >
           {added ? '✓ ' : '+ '}{tag}
         </button>
       {/each}
     </div>
-    <p class="hint">칩을 누르면 프롬프트에 태그가 추가돼요.</p>
+    <p class="hint">{t('help.chipHint')}</p>
   {/if}
 </details>
 

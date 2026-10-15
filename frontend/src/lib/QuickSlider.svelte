@@ -1,8 +1,11 @@
 <script>
   // 퀵 패널용 간결 숫자 컨트롤 (슬라이더 + 숫자박스)
   import { store } from './store.svelte.js';
+  import { t } from './i18n.svelte.js';
 
   let { setting } = $props();
+
+  const label = $derived(setting.labelKey ? t(setting.labelKey) : setting.label);
 
   const isInt = $derived(
     Number.isInteger(setting.min ?? 0) && Number.isInteger(setting.max ?? 0)
@@ -27,7 +30,7 @@
 
 <div class="quick-slider">
   <div class="quick-slider-head">
-    <span class="quick-label">{setting.label}</span>
+    <span class="quick-label">{label}</span>
     <input
       type="number"
       class="number-box qs-num"
@@ -36,7 +39,7 @@
       {step}
       value={val}
       oninput={onNumber}
-      aria-label={setting.label}
+      aria-label={label}
     />
   </div>
   <input
@@ -46,6 +49,6 @@
     {step}
     value={val}
     oninput={onSlider}
-    aria-label={setting.label}
+    aria-label={label}
   />
 </div>

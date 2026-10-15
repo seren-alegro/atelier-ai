@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { historyStore, loadHistory, favorites } from './history.svelte.js';
   import HistoryGrid from './HistoryGrid.svelte';
+  import { t } from './i18n.svelte.js';
 
   let { onLoad = null } = $props();
 
@@ -14,9 +15,9 @@
 
 <div class="library-tab">
   <div class="tab-head">
-    <h3>라이브러리</h3>
+    <h3>{t('lib.title')}</h3>
     <button class="btn" onclick={() => loadHistory()} disabled={historyStore.loading}>
-      {historyStore.loading ? '불러오는 중…' : '새로고침'}
+      {historyStore.loading ? t('common.loading') : t('common.refresh')}
     </button>
   </div>
   {#if historyStore.notice}<p class="notice">{historyStore.notice}</p>{/if}
@@ -25,8 +26,8 @@
     items={favs}
     {onLoad}
     emptyText={historyStore.offline
-      ? '백엔드에 연결되지 않았어요.'
-      : '즐겨찾기한 그림이 없어요. 작업내역에서 ★를 눌러 모아보세요.'}
+      ? t('hist.offline')
+      : t('lib.emptyFav')}
   />
 </div>
 

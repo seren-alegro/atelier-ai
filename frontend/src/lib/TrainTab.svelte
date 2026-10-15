@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { t } from './i18n.svelte.js';
   import {
     checkpoints,
     loadModels,
@@ -44,7 +45,7 @@
 
   async function onCaptionBatch() {
     if (!datasetDir.trim()) {
-      captionResult = { error: '데이터셋 폴더를 입력해주세요.' };
+      captionResult = { error: t('train.needDataset') };
       return;
     }
     captionBusy = true;
@@ -67,11 +68,11 @@
   async function onTrain() {
     trainError = '';
     if (!baseModel) {
-      trainError = '베이스 체크포인트를 선택해주세요.';
+      trainError = t('train.needBase');
       return;
     }
     if (!datasetDir.trim()) {
-      trainError = '데이터셋 폴더를 입력해주세요.';
+      trainError = t('train.needDataset');
       return;
     }
     trainBusy = true;
@@ -129,19 +130,15 @@
 </script>
 
 <div class="train-tab">
-  <h2>LoRA 학습</h2>
-  <p class="tab-desc">
-    내 이미지로 캐릭터·화풍 LoRA를 직접 학습해요.
-    결과는 모델 폴더의 lora/에 저장되어 바로 쓸 수 있어요.
-    학습에는 12GB 이상 VRAM이 필요해요.
-  </p>
+  <h2>{t('train.title')}</h2>
+  <p class="tab-desc">{t('train.desc')}</p>
 
   <!-- 1. 베이스 모델 -->
   <section>
-    <h3>1. 베이스 모델</h3>
-    <p class="field-desc">학습시킬 체크포인트예요. Anima(SDXL 계열) 권장.</p>
+    <h3>{t('train.sec1')}</h3>
+    <p class="field-desc">{t('train.sec1Desc')}</p>
     {#if cps.length === 0}
-      <p class="warn">체크포인트가 없어요. 모델 탭에서 먼저 확인해주세요.</p>
+      <p class="warn">{t('train.noCkpt')}</p>
     {:else}
       <select bind:value={baseModel}>
         {#each cps as c (c.name)}
@@ -153,9 +150,9 @@
 
   <!-- 2. 데이터셋 + 자동 캡션 -->
   <section>
-    <h3>2. 데이터셋</h3>
+    <h3>{t('train.sec2')}</h3>
     <p class="field-desc">
-      학습 이미지 폴더예요. 15~30장 권장. 캡션 .txt가 없으면 아래 자동 캡션으로 만들 수 있어요.
+      {t('train.sec2Desc')}
     </p>
     <input
       type="text"
@@ -164,10 +161,10 @@
     />
     <div class="row">
       <label>
-        캡션 방식
+        {t('train.captionMethod')}
         <select bind:value={captionMethod}>
-          <option value="wd14">WD14 v3 (단보루 태그)</option>
-          <option value="blip">BLIP (자연어 문장)</option>
+          <option value="wd14">{t('train.wd14')}</option>
+          <option value="blip">{t('train.blip')}</option>
         </select>
       </label>
       <button
@@ -175,7 +172,7 @@
         onclick={onCaptionBatch}
         disabled={captionBusy}
       >
-        {captionBusy ? '캡션 생성 중…' : '일괄 자동 캡션'}
+        {captionBusy ? t('train.captionBusy') : '일괄 자동 캡션'}
       </button>
     </div>
     {#if captionResult}
@@ -183,9 +180,9 @@
         <p class="error">{captionResult.error}</p>
       {:else}
         <p class="ok">
-          캡션 {captionResult.done}장 생성
-          {#if captionResult.skipped > 0}(건너뜀 {captionResult.skipped}장){/if}
-          {#if captionResult.failed > 0}(실패 {captionResult.failed}장){/if}
+          {t('train.captionDone', { n: captionResult.done })}
+          {#if captionResult.skipped > 0}{t('train.captionSkipped', { n: captionResult.skipped })}{/if}
+          {#if captionResult.failed > 0}{t('train.captionFailed', { n: captionResult.failed })}{/if}
         </p>
       {/if}
     {/if}
@@ -193,47 +190,47 @@
 
   <!-- 3. 학습 설정 -->
   <section>
-    <h3>3. 학습 설정</h3>
+    <h3>{t('train.sec3')}</h3>
 
     <label class="field">
-      <span class="field-label">트리거 워드</span>
-      <span class="field-desc">캡션 맨 앞에 자동 삽입돼요. 생성할 때 이 단어로 캐릭터를 불러내요.</span>
+      <span class="field-label">{t('train.trigger')}</span>
+      <span class="field-desc">{t('train.triggerDesc')}</span>
       <input type="text" placeholder="sks girl" bind:value={triggerWord} />
     </label>
 
     <label class="field">
-      <span class="field-label">Rank (dim) — 추천 16</span>
-      <span class="field-desc">클수록 표현력이 오르지만 파일이 커지고 VRAM을 더 써요. 캐릭터 LoRA는 16이 무난해요.</span>
+      <span class="field-label">{t('train.rank')}</span>
+      <span class="field-desc">{t('train.rankDesc')}</span>
       <input type="number" min="1" max="128" bind:value={rank} />
     </label>
 
     <label class="field">
-      <span class="field-label">학습률 — 추천 0.0001</span>
-      <span class="field-desc">너무 크면 발산하고, 너무 작으면 안 배워요. AdamW 기준 0.0001이 무난해요.</span>
+      <span class="field-label">{t('train.lr')}</span>
+      <span class="field-desc">{t('train.lrDesc')}</span>
       <input type="number" min="0.00001" max="0.01" step="0.00001" bind:value={lr} />
     </label>
 
     <label class="field">
-      <span class="field-label">이미지당 스텝 — 추천 75</span>
-      <span class="field-desc">총 스텝 = 이미지 수 × 이 값. 20장이면 1500 스텝이에요.</span>
+      <span class="field-label">{t('train.spi')}</span>
+      <span class="field-desc">{t('train.spiDesc')}</span>
       <input type="number" min="1" max="1000" bind:value={stepsPerImage} />
     </label>
 
     <label class="field">
-      <span class="field-label">해상도 — 추천 1024</span>
-      <span class="field-desc">Anima(SDXL 계열) 네이티브 해상도예요. 클수록 VRAM을 더 써요.</span>
+      <span class="field-label">{t('train.res')}</span>
+      <span class="field-desc">{t('train.resDesc')}</span>
       <input type="number" min="256" max="2048" step="64" bind:value={resolution} />
     </label>
 
     <label class="field check">
       <input type="checkbox" bind:checked={trainTextEncoder} />
-      <span class="field-label">텍스트 인코더도 학습 (기본 OFF)</span>
+      <span class="field-label">{t('train.te')}</span>
     </label>
-    <p class="field-desc">켰을 때 품질이 오를 수 있지만 VRAM이 크게 늘어요. 처음엔 꺼두는 걸 권장해요.</p>
+    <p class="field-desc">{t('train.teDesc')}</p>
 
     <label class="field">
-      <span class="field-label">저장 파일명</span>
-      <span class="field-desc">lora/ 폴더에 이 이름으로 저장돼요.</span>
+      <span class="field-label">{t('train.outName')}</span>
+      <span class="field-desc">{t('train.outNameDesc')}</span>
       <input type="text" placeholder="my-lora" bind:value={outputName} />
     </label>
   </section>
@@ -241,7 +238,7 @@
   <!-- 4. 학습 시작 -->
   <section>
     <button class="primary" onclick={onTrain} disabled={trainBusy}>
-      {trainBusy ? '학습 중…' : '학습 시작'}
+      {trainBusy ? t('train.busy') : t('train.start')}
     </button>
     {#if trainError}
       <p class="error">{trainError}</p>
@@ -252,16 +249,16 @@
           <div class="progress-fill" style="width: {progressPct}%"></div>
         </div>
         <p>
-          {#if job.status === 'queued'}대기 중…{/if}
+          {#if job.status === 'queued'}{t('train.queued')}{/if}
           {#if job.status === 'running'}
-            {job.step} / {job.total_steps} 스텝 ({progressPct}%)
+            {t('train.progress', { step: job.step, total: job.total_steps, pct: progressPct })}
             {#if job.loss != null}· loss {job.loss}{/if}
           {/if}
           {#if job.status === 'done'}
-            <span class="ok">완료! {job.results.join(', ')} — 모델 탭 LoRA에서 바로 쓸 수 있어요.</span>
+            <span class="ok">{t('train.doneMsg', { results: job.results.join(', ') })}</span>
           {/if}
           {#if job.status === 'error'}
-            <span class="error">실패: {job.error}</span>
+            <span class="error">{t('train.failMsg', { error: job.error })}</span>
           {/if}
         </p>
       </div>

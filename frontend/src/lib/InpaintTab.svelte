@@ -1,6 +1,7 @@
 <script>
   // 인페인트 탭: 이미지 업로드 → 마스크 브러시 → inpaint 생성
   import { store } from './store.svelte.js';
+  import { t } from './i18n.svelte.js';
   import TagInput from './TagInput.svelte';
   import { requestGenerate } from './api.js';
 
@@ -185,7 +186,7 @@
       const paths = await currentJob;
       results = paths;
     } catch (e) {
-      notice = e.message || '인페인트 중 오류가 발생했어요.';
+      notice = e.message || t('inp.fail');
     } finally {
       busy = false;
       currentJob = null;
@@ -194,13 +195,13 @@
 </script>
 
 <div class="inpaint-tab">
-  <h2>인페인트</h2>
-  <p class="field-desc">그림을 불러와서 고치고 싶은 부분을 칠하면 AI가 다시 그려줘요.</p>
+  <h2>{t('app.editInpaint')}</h2>
+  <p class="field-desc">{t('inp.desc')}</p>
 
   <div class="field">
     <div class="field-head">
-      <span class="field-label">이미지</span>
-      <button class="btn" onclick={pickFile}>이미지 불러오기</button>
+      <span class="field-label">{t('inp.imageLabel')}</span>
+      <button class="btn" onclick={pickFile}>{t('inp.loadImage')}</button>
     </div>
     <input
       type="file"
@@ -210,10 +211,10 @@
       style="display:none"
     />
     {#if !imageDataUrl}
-      <div class="canvas-placeholder">이미지를 불러오세요</div>
+      <div class="canvas-placeholder">{t('inp.placeholder')}</div>
     {:else}
       <div class="canvas-stack">
-        <img bind:this={imgEl} src={imageDataUrl} alt="인페인트 대상" onload={onImageLoad} />
+        <img bind:this={imgEl} src={imageDataUrl} alt={t('inp.alt')} onload={onImageLoad} />
         <canvas
           bind:this={viewCanvas}
           class="mask-layer"
@@ -224,38 +225,38 @@
         ></canvas>
       </div>
       <div class="toolbar">
-        <button class="btn tool" class:active={!erasing} onclick={() => (erasing = false)}>브러시</button>
-        <button class="btn tool" class:active={erasing} onclick={() => (erasing = true)}>지우개</button>
+        <button class="btn tool" class:active={!erasing} onclick={() => (erasing = false)}>{t('inp.brush')}</button>
+        <button class="btn tool" class:active={erasing} onclick={() => (erasing = true)}>{t('inp.eraser')}</button>
         <label class="brush-label">
-          크기
+          {t('inp.brushSize')}
           <input type="range" min="8" max="160" step="2" bind:value={brushSize} />
           <span>{brushSize}px</span>
         </label>
-        <button class="btn tool" onclick={undo} disabled={undoStack.length === 0}>되돌리기</button>
-        <button class="btn tool" onclick={clearMask}>지우기</button>
+        <button class="btn tool" onclick={undo} disabled={undoStack.length === 0}>{t('inp.undo')}</button>
+        <button class="btn tool" onclick={clearMask}>{t('inp.clear')}</button>
       </div>
-      <p class="recommended">빨갛게 칠한 부분이 다시 그려져요.</p>
+      <p class="recommended">{t('inp.redHint')}</p>
     {/if}
   </div>
 
   <div class="field">
-    <div class="field-head"><span class="field-label">프롬프트</span></div>
-    <TagInput bind:value={store.values.prompt} placeholder="태그 입력 (예: 1girl, solo)" />
+    <div class="field-head"><span class="field-label">{t('inp.prompt')}</span></div>
+    <TagInput bind:value={store.values.prompt} placeholder={t('inp.promptPh')} />
   </div>
 
   <details class="field">
-    <summary class="field-label">네거티브 프롬프트</summary>
+    <summary class="field-label">{t('inp.negative')}</summary>
     <div class="neg-body">
-      <TagInput bind:value={store.values.negative_prompt} placeholder="제외할 태그 입력" />
+      <TagInput bind:value={store.values.negative_prompt} placeholder={t('gen.negativePlaceholder')} />
     </div>
   </details>
 
   <div class="field">
     <div class="field-head">
-      <span class="field-label">디노이즈 강도</span>
-      <span class="recommended">추천: {denoiseMeta()?.recommended ?? 0.75}</span>
+      <span class="field-label">{t('inp.denoise')}</span>
+      <span class="recommended">{t('common.recommended')} {denoiseMeta()?.recommended ?? 0.75}</span>
     </div>
-    <p class="field-desc">{denoiseMeta()?.description ?? '원본을 얼마나 바꿀지 정해요.'}</p>
+    <p class="field-desc">{denoiseMeta()?.description ?? t('inp.denoiseDesc')}</p>
     <div class="number-row">
       <input
         type="range"
@@ -273,23 +274,23 @@
     onclick={onInpaint}
     disabled={busy || !imageDataUrl || !hasMask || !store.loaded}
   >
-    {busy ? '그리는 중…' : '인페인트 실행'}
+    {busy ? t('common.painting') : t('inp.run')}
   </button>
   {#if busy}
-    <button class="btn" onclick={() => currentJob?.cancel()}>취소</button>
+    <button class="btn" onclick={() => currentJob?.cancel()}>{t('common.cancel')}</button>
   {/if}
   {#if !hasMask && imageDataUrl}
-    <p class="recommended">마스크를 먼저 칠해주세요.</p>
+    <p class="recommended">{t('inp.needMask')}</p>
   {/if}
   {#if notice}<p class="notice">{notice}</p>{/if}
 
-  <h3>결과</h3>
+  <h3>{t('common.resultsTitle')}</h3>
   {#if results.length === 0}
-    <div class="gallery-empty">아직 결과가 없어요.</div>
+    <div class="gallery-empty">{t('common.noResults')}</div>
   {:else}
     <div class="gallery">
       {#each results as src}
-        <img {src} alt="인페인트 결과" />
+        <img {src} alt={t('inp.resultAlt')} />
       {/each}
     </div>
   {/if}

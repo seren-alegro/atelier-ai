@@ -4,6 +4,7 @@ import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
+import { t } from './i18n.svelte.js';
 
 export const updateState = $state({
   current: '',
@@ -33,29 +34,29 @@ export async function loadCurrentVersion() {
 /** 새 버전 확인. silent=true면 새 버전이 있을 때만 상태를 바꾼다. */
 export async function checkForUpdates({ silent = false } = {}) {
   if (!isTauri()) {
-    if (!silent) updateState.message = '앱에서 실행 중일 때만 확인할 수 있어요.';
+    if (!silent) updateState.message = t('upd.notInAppMsg');
     return;
   }
   if (updateState.status === 'checking' || updateState.status === 'downloading')
     return;
   updateState.status = 'checking';
   updateState.progress = 0;
-  if (!silent) updateState.message = '새 버전을 확인하는 중…';
+  if (!silent) updateState.message = t('upd.checkingMsg');
   try {
     const update = await check();
     if (!update) {
       updateState.status = 'latest';
       updateState.availableVersion = '';
-      if (!silent) updateState.message = '최신 버전을 사용 중이에요.';
+      if (!silent) updateState.message = t('upd.latestMsg');
       return;
     }
     updateState.status = 'available';
     updateState.availableVersion = update.version;
-    updateState.message = `새 버전 ${update.version}이 있어요.`;
+    updateState.message = t('upd.foundMsg', { v: update.version });
   } catch (e) {
     updateState.status = 'error';
     if (!silent)
-      updateState.message = `확인에 실패했어요: ${e?.message || e}`;
+      updateState.message = t('upd.failMsg', { e: e?.message || e });
   }
 }
 
@@ -63,12 +64,12 @@ export async function checkForUpdates({ silent = false } = {}) {
 export async function downloadAndInstall() {
   if (updateState.status === 'downloading') return;
   updateState.status = 'checking';
-  updateState.message = '업데이트 정보를 가져오는 중…';
+  updateState.message = t('upd.fetchingMsg');
   try {
     const update = await check();
     if (!update) {
       updateState.status = 'latest';
-      updateState.message = '최신 버전을 사용 중이에요.';
+      updateState.message = t('upd.latestMsg');
       return;
     }
     updateState.status = 'downloading';

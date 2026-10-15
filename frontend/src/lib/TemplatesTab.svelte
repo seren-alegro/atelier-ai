@@ -1,14 +1,15 @@
 <script>
   import { onMount } from 'svelte';
   import { store } from './store.svelte.js';
+  import { t } from './i18n.svelte.js';
 
   const STORAGE_KEY = 'atelier-ai-templates';
 
   // 내장 템플릿 (삭제 불가, 항상 표시)
-  const BUILTINS = [
+  const BUILTINS = $derived([
     {
-      name: '고화질 애니 기본',
-      desc: '깔끔한 고화질 애니메이션 스타일의 기본 세팅이에요.',
+      name: t('tpl.builtin1Name'),
+      desc: t('tpl.builtin1Desc'),
       builtin: true,
       values: {
         prompt:
@@ -24,8 +25,8 @@
       },
     },
     {
-      name: '인물 클로즈업',
-      desc: '얼굴 클로즈업에 맞춘 세팅이에요.',
+      name: t('tpl.builtin2Name'),
+      desc: t('tpl.builtin2Desc'),
       builtin: true,
       values: {
         prompt:
@@ -40,7 +41,7 @@
         batch_size: 1,
       },
     },
-  ];
+  ]);
 
   let userTemplates = $state([]);
   let name = $state('');
@@ -60,34 +61,34 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userTemplates));
     } catch {
-      notice = '브라우저 저장소에 저장하지 못했어요.';
+      notice = t('tpl.saveFail');
     }
   }
 
   function saveCurrent() {
     const n = name.trim();
     if (!n) {
-      notice = '템플릿 이름을 입력해주세요.';
+      notice = t('tpl.needName');
       return;
     }
     // 깊은 복사로 현재 설정값을 통째로 저장
     const values = JSON.parse(JSON.stringify(store.values));
     userTemplates = [
-      { name: n, desc: '내 템플릿', builtin: false, values },
+      { name: n, desc: t('tpl.myTemplate'), builtin: false, values },
       ...userTemplates.filter((t) => t.name !== n),
     ];
     writeStorage();
     name = '';
-    notice = `'${n}'을(를) 저장했어요.`;
+    notice = t('tpl.saved', { name: n });
   }
 
   function applyTemplate(tpl) {
     store.values = { ...store.values, ...tpl.values };
-    notice = `'${tpl.name}'을(를) 적용했어요. 생성 탭에서 확인해보세요.`;
+    notice = t('tpl.applied', { name: tpl.name });
   }
 
   function deleteTemplate(tpl) {
-    if (!confirm(`'${tpl.name}'을(를) 삭제할까요?`)) return;
+    if (!confirm(t('tpl.deleteConfirm', { name: tpl.name }))) return;
     userTemplates = userTemplates.filter((t) => t.name !== tpl.name);
     writeStorage();
   }
@@ -96,7 +97,7 @@
     const bits = [];
     if (values.width && values.height)
       bits.push(`${values.width}×${values.height}`);
-    if (values.steps) bits.push(`${values.steps}스텝`);
+    if (values.steps) bits.push(t('common.stepsCount', { n: values.steps }));
     if (values.cfg_scale) bits.push(`CFG ${values.cfg_scale}`);
     if (values.sampler) bits.push(values.sampler);
     return bits.join(' · ');
@@ -109,31 +110,28 @@
 
 <div class="templates-tab">
   <div class="tab-head">
-    <h3>템플릿</h3>
+    <h3>{t('tpl.title')}</h3>
   </div>
   {#if notice}<p class="notice">{notice}</p>{/if}
 
   <section class="save-box">
-    <h4>현재 설정 저장하기</h4>
-    <p class="hint">
-      지금의 프롬프트·네거티브·주요 설정을 이름 붙여 저장해요. (이 브라우저에만
-      저장돼요)
-    </p>
+    <h4>{t('tpl.saveTitle')}</h4>
+    <p class="hint">{t('tpl.saveHint')}</p>
     <div class="save-row">
       <input
         class="text-input"
         type="text"
         bind:value={name}
-        placeholder="템플릿 이름 (예: 내 최애 세팅)"
+        placeholder={t('tpl.namePlaceholder')}
         maxlength="40"
         onkeydown={(e) => e.key === 'Enter' && saveCurrent()}
       />
-      <button class="btn primary" onclick={saveCurrent}>저장</button>
+      <button class="btn primary" onclick={saveCurrent}>{t('common.save')}</button>
     </div>
   </section>
 
   <section>
-    <h4>기본 템플릿</h4>
+    <h4>{t('tpl.builtinTitle')}</h4>
     <div class="tpl-grid">
       {#each BUILTINS as tpl (tpl.name)}
         <article class="tpl-card">
@@ -144,7 +142,7 @@
             {tpl.values.prompt}
           </p>
           <button class="btn small" onclick={() => applyTemplate(tpl)}>
-            적용
+            {t('common.apply')}
           </button>
         </article>
       {/each}
@@ -152,10 +150,10 @@
   </section>
 
   <section>
-    <h4>내 템플릿 ({userTemplates.length})</h4>
+    <h4>{t('tpl.myTitle', { count: userTemplates.length })}</h4>
     {#if userTemplates.length === 0}
       <div class="gallery-empty">
-        저장된 템플릿이 없어요. 위에서 현재 설정을 저장해보세요.
+        {t('tpl.empty')}
       </div>
     {:else}
       <div class="tpl-grid">
@@ -164,17 +162,17 @@
             <h5>{tpl.name}</h5>
             <p class="meta dim">{fmtValues(tpl.values)}</p>
             <p class="prompt-preview" title={tpl.values.prompt}>
-              {tpl.values.prompt || '(프롬프트 없음)'}
+              {tpl.values.prompt || t('hist.noPrompt')}
             </p>
             <div class="card-actions">
               <button class="btn small" onclick={() => applyTemplate(tpl)}>
-                적용
+                {t('common.apply')}
               </button>
               <button
                 class="btn small ghost danger"
                 onclick={() => deleteTemplate(tpl)}
               >
-                삭제
+                {t('common.delete')}
               </button>
             </div>
           </article>

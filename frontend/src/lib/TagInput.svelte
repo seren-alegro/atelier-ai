@@ -4,10 +4,11 @@
   // 자동완성: 입력 중 후보 드롭다운 (↑↓ 이동, Enter/Tab 확정, Esc 닫기).
   // 한국어 라벨: 백엔드 /api/tag-labels에서 받아 칩 툴팁·자동완성에 표시.
   import { onMount } from 'svelte';
+  import { t } from './i18n.svelte.js';
   import { suggestTags } from './tagSuggestions.js';
   import { ensureTagLabels, labelOf } from './tagLabels.js';
 
-  let { value = $bindable(''), placeholder = '태그를 입력하고 쉼표를 누르세요' } = $props();
+  let { value = $bindable(''), placeholder = t('ti.placeholder') } = $props();
   let draft = $state('');
   let open = $state(false);
   let activeIdx = $state(0);
@@ -91,7 +92,7 @@
     {#each tagList() as tag, i (tag + i)}
       <span class="chip" title={labelOf(tag) ?? tag}>
         <span class="chip-tag">{tag}</span>
-        <button class="chip-x" onclick={() => removeAt(i)} aria-label="태그 삭제">×</button>
+        <button class="chip-x" onclick={() => removeAt(i)} aria-label={t('ti.deleteTag')}>×</button>
       </span>
     {/each}
     <input
@@ -109,8 +110,8 @@
       <button
         class="add-btn"
         onmousedown={(e) => { e.preventDefault(); commitDraft(); }}
-        title="태그 추가"
-      >＋ 추가</button>
+        title={t('ti.addTag')}
+      >{t('ti.addBtn')}</button>
     {/if}
   </div>
   {#if open && suggestions.length > 0}

@@ -1,18 +1,20 @@
 <script>
   // 왼쪽 아이콘 내비게이션 바 — 작업 중심 6개 메뉴
+  import { t } from './i18n.svelte.js';
+
   let { nav, onSelect } = $props();
 
-  const items = [
-    { id: 'create', label: '이미지 만들기', icon: '✦' },
-    { id: 'edit', label: '이미지 편집', icon: '🎨' },
-    { id: 'models', label: '모델 및 학습', icon: '📦' },
-    { id: 'library', label: '라이브러리', icon: '🖼' },
-    { id: 'history', label: '작업 기록', icon: '🕒' },
-    { id: 'settings', label: '설정', icon: '⚙' },
-  ];
+  const items = $derived([
+    { id: 'create', label: t('nav.create'), icon: '✦' },
+    { id: 'edit', label: t('nav.edit'), icon: '🎨' },
+    { id: 'models', label: t('nav.models'), icon: '📦' },
+    { id: 'library', label: t('nav.library'), icon: '🖼' },
+    { id: 'history', label: t('nav.history'), icon: '🕒' },
+    { id: 'settings', label: t('nav.settings'), icon: '⚙' },
+  ]);
 </script>
 
-<nav class="sidenav" aria-label="주 메뉴">
+<nav class="sidenav" aria-label={t('nav.main')}>
   {#each items as it (it.id)}
     <button
       class="nav-item"
