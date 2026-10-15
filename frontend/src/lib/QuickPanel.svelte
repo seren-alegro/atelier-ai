@@ -53,6 +53,15 @@
     return store.values.loras[name];
   }
 
+  // 업스케일 강도 (갤러리 업스케일 버튼용). QuickSlider용 설정 디스크립터.
+  const upscaleSetting = {
+    key: 'upscale_strength',
+    label: '업스케일 강도',
+    min: 0.5,
+    max: 1.0,
+    recommended: 0.5,
+  };
+
   // Hires Fix 섹션 (고급 영역). QuickSlider용 설정 디스크립터.
   const hiresFixScaleSetting = {
     key: 'hires_fix_scale',
