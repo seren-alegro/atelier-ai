@@ -24,8 +24,16 @@ def test_recommended_within_bounds():
 
 def test_sampler_options_expected():
     s = get_setting("sampler")
-    assert s.options == ["er_sde", "dpmpp_2m_sde_gpu", "dpmpp_2m_sde",
-                         "euler_ancestral", "dpmpp_2m_karras", "ddim",
+    assert s.options == ["er_sde",
+                         "euler", "euler_ancestral",
+                         "dpmpp_2m", "dpmpp_2m_karras",
+                         "dpmpp_2s_ancestral", "dpmpp_2s_ancestral_karras",
+                         "dpmpp_sde", "dpmpp_sde_karras",
+                         "dpmpp_2m_sde", "dpmpp_2m_sde_gpu", "dpmpp_2m_sde_karras",
+                         "dpmpp_2m_sde_heun", "dpmpp_2m_sde_heun_karras",
+                         "dpmpp_3m_sde", "dpmpp_3m_sde_karras",
+                         "dpm2", "dpm2_ancestral", "dpm_fast", "dpm_adaptive",
+                         "lms", "heun", "ddim", "plms", "unipc",
                          "restart", "sa_solver", "deis", "lcm", "tcd"]
     assert s.recommended == "er_sde"
 

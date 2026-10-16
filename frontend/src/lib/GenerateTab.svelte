@@ -3,7 +3,7 @@
   import { store } from './store.svelte.js';
   import { historyStore, loadHistory } from './history.svelte.js';
   import TagInput from './TagInput.svelte';
-  import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestOutpaint, requestXyPlot, getXyPlotJob, cancelXyPlotJob, requestPngInfo, fetchFavorites, addFavorite, deleteFavorite, fetchNegativePresets, addNegativePreset, deleteNegativePreset, apiUrl } from './api.js';
+  import { requestGenerate, requestUpscale, requestAdetailer, requestBatch, getBatchJob, cancelBatchJob, requestOutpaint, requestXyPlot, getXyPlotJob, cancelXyPlotJob, requestPngInfo, fetchFavorites, addFavorite, deleteFavorite, fetchNegativePresets, addNegativePreset, deleteNegativePreset, fetchSamplerAliases, resolveSamplerKey, apiUrl } from './api.js';
   import { t } from './i18n.svelte.js';
 
   let { onLoad = null } = $props();
@@ -288,9 +288,19 @@
         pngNotice = t('gen.loadFromImageFail');
         return;
       }
+      // 샘플러 이름 정규화 ("Euler a" → "euler_ancestral" 등). 실패 시 무시.
+      let samplerAliases = null;
+      try {
+        samplerAliases = await fetchSamplerAliases();
+      } catch { /* 조용히 무시 */ }
       for (const k of PNG_KEYS) {
         const v = params[k];
         if (v === undefined || v === null) continue;
+        if (k === 'sampler' && typeof v === 'string' && samplerAliases) {
+          const key = resolveSamplerKey(v, samplerAliases.aliases, samplerAliases.keys);
+          store.values[k] = key ?? String(v);
+          continue;
+        }
         if (PNG_NUM_KEYS.includes(k)) {
           const n = Number(v);
           if (!Number.isNaN(n)) store.values[k] = n;

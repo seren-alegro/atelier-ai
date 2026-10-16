@@ -1,6 +1,6 @@
 """샘플러 이름 → diffusers 스케줄러 매핑.
 
-settings.py의 `sampler` 설정값(일반 6종 + 실험실 5종)을
+settings.py의 `sampler` 설정값(일반 25종 + 실험실 5종)을
 diffusers 스케줄러로 변환한다.
 
 원칙:
@@ -9,12 +9,17 @@ diffusers 스케줄러로 변환한다.
   매핑하고 approximate=True + note에 "근사 매핑, 실측 필요"를 명시한다.
 - 매핑 근거가 불확실한 것은 지어내지 않고 note에 불확실함을 적는다.
 
+SAMPLER_ALIASES는 A1111 표시 이름("Euler a" 등)과 ComfyUI 이름("dpm_2" 등)을
+내부 키로 연결한다. normalize_sampler_name()으로 대소문자·공백을 무시하고
+내부 키를 찾는다 (PNG 메타데이터의 샘플러 이름 정규화용).
+
 이 모듈은 diffusers/torch 없이 import 가능해야 한다
 (스케줄러 클래스는 문자열로 보관, 실제 로딩은 build_scheduler에서 lazy import).
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -86,7 +91,198 @@ SAMPLER_MAP: dict[str, SamplerSpec] = {
         scheduler="TCDScheduler",
         note="diffusers 네이티브 지원. TCD 증류 모델/LoRA와 함께 써야 제 성능.",
     ),
+    # --- A1111 전체 샘플러 (추가) ---
+    "euler": SamplerSpec(
+        scheduler="EulerDiscreteScheduler",
+        note="정확 대응. A1111 'Euler'.",
+    ),
+    "lms": SamplerSpec(
+        scheduler="LMSDiscreteScheduler",
+        note="정확 대응. A1111 'LMS'.",
+    ),
+    "heun": SamplerSpec(
+        scheduler="HeunDiscreteScheduler",
+        note="정확 대응. A1111 'Heun'.",
+    ),
+    "dpm2": SamplerSpec(
+        scheduler="KDPM2DiscreteScheduler",
+        note="정확 대응. A1111 'DPM2' (Karras DPM 2차).",
+    ),
+    "dpm2_ancestral": SamplerSpec(
+        scheduler="KDPM2AncestralDiscreteScheduler",
+        note="정확 대응. A1111 'DPM2 a'.",
+    ),
+    "dpmpp_2s_ancestral": SamplerSpec(
+        scheduler="DPMSolverSinglestepScheduler",
+        note="정확 대응. A1111 'DPM++ 2S a' (singlestep ancestral).",
+    ),
+    "dpmpp_2s_ancestral_karras": SamplerSpec(
+        scheduler="DPMSolverSinglestepScheduler",
+        kwargs={"use_karras_sigmas": True},
+        note="정확 대응. A1111 'DPM++ 2S a Karras'.",
+    ),
+    "dpmpp_2m": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "dpmsolver++", "solver_order": 2},
+        note="정확 대응. A1111 'DPM++ 2M'.",
+    ),
+    "dpmpp_sde": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "sde-dpmsolver++", "solver_order": 2},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM++ SDE'. diffusers의 sde-dpmsolver++는 "
+             "동일 알고리즘 계열이나 Kohya/ComfyUI 구현체와 세부 구현이 다를 수 있음.",
+    ),
+    "dpmpp_sde_karras": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "sde-dpmsolver++", "solver_order": 2,
+                "use_karras_sigmas": True},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM++ SDE Karras'. diffusers의 "
+             "sde-dpmsolver++는 동일 알고리즘 계열이나 구현체와 세부 구현이 "
+             "다를 수 있음.",
+    ),
+    "dpmpp_2m_sde_karras": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "sde-dpmsolver++", "solver_order": 2,
+                "use_karras_sigmas": True},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM++ 2M SDE Karras'. diffusers의 "
+             "sde-dpmsolver++는 동일 알고리즘 계열이나 구현체와 세부 구현이 "
+             "다를 수 있음.",
+    ),
+    "dpmpp_2m_sde_heun": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "sde-dpmsolver++", "solver_order": 2},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM++ 2M SDE Heun'의 Heun 보정 단계는 "
+             "diffusers에 직접 대응이 없어 sde-dpmsolver++로 근사.",
+    ),
+    "dpmpp_2m_sde_heun_karras": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "sde-dpmsolver++", "solver_order": 2,
+                "use_karras_sigmas": True},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM++ 2M SDE Heun Karras'의 Heun 보정 "
+             "단계는 diffusers에 직접 대응이 없어 sde-dpmsolver++로 근사.",
+    ),
+    "dpmpp_3m_sde": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "sde-dpmsolver++", "solver_order": 3},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM++ 3M SDE'. diffusers의 sde-dpmsolver++는 "
+             "동일 알고리즘 계열이나 Kohya/ComfyUI 구현체와 세부 구현이 다를 수 있음.",
+    ),
+    "dpmpp_3m_sde_karras": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "sde-dpmsolver++", "solver_order": 3,
+                "use_karras_sigmas": True},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM++ 3M SDE Karras'. diffusers의 "
+             "sde-dpmsolver++는 동일 알고리즘 계열이나 구현체와 세부 구현이 "
+             "다를 수 있음.",
+    ),
+    "dpm_fast": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "dpmsolver++", "solver_order": 2},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM fast'(k-diffusion sample_dpm_fast)는 "
+             "diffusers에 직접 대응이 없어 DPM-Solver++ 2M으로 근사.",
+    ),
+    "dpm_adaptive": SamplerSpec(
+        scheduler="DPMSolverMultistepScheduler",
+        kwargs={"algorithm_type": "dpmsolver++", "solver_order": 2},
+        approximate=True,
+        note="근사 매핑, 실측 필요. A1111 'DPM adaptive'의 적응형 스텝 조절은 "
+             "diffusers에 대응이 없어 고정 스텝 DPM-Solver++ 2M으로 근사.",
+    ),
+    "plms": SamplerSpec(
+        scheduler="PNDMScheduler",
+        note="정확 대응. A1111 'PLMS' (PNDM pseudo-linear multistep).",
+    ),
+    "unipc": SamplerSpec(
+        scheduler="UniPCMultistepScheduler",
+        note="정확 대응. A1111 'UniPC'.",
+    ),
 }
+
+
+#: A1111 표시 이름 / ComfyUI 이름 → 내부 키
+SAMPLER_ALIASES: dict[str, str] = {
+    # --- A1111 표시 이름 ---
+    "Euler a": "euler_ancestral",
+    "Euler": "euler",
+    "LMS": "lms",
+    "Heun": "heun",
+    "DPM2": "dpm2",
+    "DPM2 a": "dpm2_ancestral",
+    "DPM++ 2S a": "dpmpp_2s_ancestral",
+    "DPM++ 2S a Karras": "dpmpp_2s_ancestral_karras",
+    "DPM++ 2M": "dpmpp_2m",
+    "DPM++ 2M Karras": "dpmpp_2m_karras",
+    "DPM++ SDE": "dpmpp_sde",
+    "DPM++ SDE Karras": "dpmpp_sde_karras",
+    "DPM++ 2M SDE": "dpmpp_2m_sde",
+    "DPM++ 2M SDE Karras": "dpmpp_2m_sde_karras",
+    "DPM++ 2M SDE Heun": "dpmpp_2m_sde_heun",
+    "DPM++ 2M SDE Heun Karras": "dpmpp_2m_sde_heun_karras",
+    "DPM++ 3M SDE": "dpmpp_3m_sde",
+    "DPM++ 3M SDE Karras": "dpmpp_3m_sde_karras",
+    "DPM fast": "dpm_fast",
+    "DPM adaptive": "dpm_adaptive",
+    "DDIM": "ddim",
+    "PLMS": "plms",
+    "UniPC": "unipc",
+    "LCM": "lcm",
+    "Restart": "restart",
+    # --- ComfyUI 이름 ---
+    "euler": "euler",
+    "euler_ancestral": "euler_ancestral",
+    "euler_cfg_pp": "euler",
+    "dpm_2": "dpm2",
+    "dpm_2_ancestral": "dpm2_ancestral",
+    "dpmpp_2s_ancestral": "dpmpp_2s_ancestral",
+    "dpmpp_2s_ancestral_cfgpp": "dpmpp_2s_ancestral",
+    "dpmpp_2m": "dpmpp_2m",
+    "dpmpp_2m_cfgpp": "dpmpp_2m",
+    "dpmpp_2m_sde": "dpmpp_2m_sde",
+    "dpmpp_2m_sde_gpu": "dpmpp_2m_sde_gpu",
+    "dpmpp_3m_sde": "dpmpp_3m_sde",
+    "dpmpp_3m_sde_gpu": "dpmpp_3m_sde",
+    "ddim": "ddim",
+    "ddim_cfg_pp": "ddim",
+    "uni_pc": "unipc",
+    "uni_pc_bh2": "unipc",
+    "lcm": "lcm",
+    "tcd": "tcd",
+    "sa_solver": "sa_solver",
+}
+
+
+def _normalize_alias_key(name: str) -> str:
+    """별칭 비교용 정규화: 소문자 + 공백 제거."""
+    return re.sub(r"\s+", "", name.strip().lower())
+
+
+#: 정규화된 별칭/키 → 내부 키 (모듈 로드 시 1회 구축)
+_NORMALIZED_SAMPLER_LOOKUP: dict[str, str] = {}
+for _key in SAMPLER_MAP:
+    _NORMALIZED_SAMPLER_LOOKUP.setdefault(
+        _normalize_alias_key(_key), _key)
+for _alias, _target in SAMPLER_ALIASES.items():
+    _NORMALIZED_SAMPLER_LOOKUP.setdefault(
+        _normalize_alias_key(_alias), _target)
+del _key, _alias, _target
+
+
+def normalize_sampler_name(name) -> str | None:
+    """표시 이름/별칭/내부 키 → 내부 키. 대소문자·공백 무시.
+
+    찾지 못하면 None (예외를 던지지 않는다).
+    """
+    if not isinstance(name, str) or not name.strip():
+        return None
+    return _NORMALIZED_SAMPLER_LOOKUP.get(_normalize_alias_key(name))
 
 
 def resolve_sampler(name: str) -> SamplerSpec:

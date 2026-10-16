@@ -16,6 +16,7 @@ from atelier.api.routes.xyplot import router as xyplot_router
 from atelier.api.routes.outpaint import router as outpaint_router
 from atelier.api.routes.pngmeta import router as pngmeta_router
 from atelier.api.routes.presets import router as presets_router
+from atelier.api.routes.samplers import router as samplers_router
 from atelier.settings import SETTINGS, defaults
 
 
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(outpaint_router)
     app.include_router(pngmeta_router)
     app.include_router(presets_router)
+    app.include_router(samplers_router)
 
     @app.get("/api/settings")
     def list_settings():

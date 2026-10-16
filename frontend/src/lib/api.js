@@ -633,3 +633,56 @@ export async function deleteNegativePreset(id) {
   }
   return await res.json();
 }
+
+/** GET /api/sampler-aliases — 샘플러 별칭 매핑. 실패 시 null. 결과는 캐시. */
+let _samplerAliases = null;
+let _samplerKeys = null;
+let _samplerAliasesFailed = false;
+export async function fetchSamplerAliases() {
+  if (_samplerAliases || _samplerAliasesFailed) {
+    return { aliases: _samplerAliases, keys: _samplerKeys };
+  }
+  try {
+    const data = await getJson('/api/sampler-aliases');
+    _samplerAliases = data?.aliases && typeof data.aliases === 'object' ? data.aliases : null;
+    _samplerKeys = Array.isArray(data?.keys) ? data.keys : null;
+  } catch {
+    _samplerAliasesFailed = true;
+  }
+  return { aliases: _samplerAliases, keys: _samplerKeys };
+}
+
+/**
+ * 샘플러 표시 이름/별칭 → 내부 키.
+ * 백엔드 normalize_sampler_name과 같은 규칙(소문자 변환 + 공백 제거).
+ * 찾지 못하면 null.
+ */
+export function resolveSamplerKey(name, aliases, keys) {
+  if (typeof name !== 'string' || !name.trim()) return null;
+  const norm = name.toLowerCase().replace(/\s+/g, '');
+  const normOf = (s) => String(s).toLowerCase().replace(/\s+/g, '');
+  if (Array.isArray(keys)) {
+    const hit = keys.find((k) => normOf(k) === norm);
+    if (hit) return hit;
+  }
+  if (aliases && typeof aliases === 'object') {
+    for (const [alias, key] of Object.entries(aliases)) {
+      if (normOf(alias) === norm) return key;
+    }
+  }
+  return null;
+}
+
+/** GET /api/samplers — 샘플러별 스케줄러 정보. 실패 시 null. 결과는 캐시. */
+let _samplersInfo = null;
+let _samplersInfoFailed = false;
+export async function fetchSamplers() {
+  if (_samplersInfo || _samplersInfoFailed) return _samplersInfo;
+  try {
+    const data = await getJson('/api/samplers');
+    _samplersInfo = data && typeof data === 'object' ? data : null;
+  } catch {
+    _samplersInfoFailed = true;
+  }
+  return _samplersInfo;
+}

@@ -433,6 +433,8 @@ ko: {
 'qp.samplerLab': '실험실',
 'qp.recSuffix': '(추천)',
 'qp.labSuffix': '(실험실)',
+'qp.schedulerLabel': '스케줄러',
+'qp.approxSuffix': '(근사 매핑)',
 
 // ---- 태그 입력 ----
 'ti.placeholder': '태그를 입력하고 쉼표를 누르세요',
@@ -908,6 +910,8 @@ en: {
 'qp.samplerLab': 'Lab',
 'qp.recSuffix': '(recommended)',
 'qp.labSuffix': '(lab)',
+'qp.schedulerLabel': 'Scheduler',
+'qp.approxSuffix': '(approximate mapping)',
 
 // ---- tag input ----
 'ti.placeholder': 'Type a tag and press comma',
@@ -1383,6 +1387,8 @@ ja: {
 'qp.samplerLab': 'ラボ',
 'qp.recSuffix': '（推奨）',
 'qp.labSuffix': '（ラボ）',
+'qp.schedulerLabel': 'スケジューラ',
+'qp.approxSuffix': '（近似マッピング）',
 
 // ---- tag input ----
 'ti.placeholder': 'タグを入力してカンマを押してください',

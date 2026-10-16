@@ -8,6 +8,7 @@
   import { store } from './store.svelte.js';
   import { modelStore, loadModels, loras } from './models.svelte.js';
   import { t } from './i18n.svelte.js';
+  import { fetchSamplers } from './api.js';
   import PromptHelper from './PromptHelper.svelte';
   import ModelSelect from './ModelSelect.svelte';
   import QuickSlider from './QuickSlider.svelte';
@@ -16,11 +17,30 @@
 
   const SAMPLER_BASE = {
     er_sde: 'ER SDE',
-    dpmpp_2m_sde_gpu: 'DPM++ 2M SDE (GPU)',
-    dpmpp_2m_sde: 'DPM++ 2M SDE',
-    euler_ancestral: 'Euler Ancestral',
+    euler: 'Euler',
+    euler_ancestral: 'Euler Ancestral (Euler a)',
+    dpmpp_2m: 'DPM++ 2M',
     dpmpp_2m_karras: 'DPM++ 2M Karras',
+    dpmpp_2s_ancestral: 'DPM++ 2S Ancestral (DPM++ 2S a)',
+    dpmpp_2s_ancestral_karras: 'DPM++ 2S Ancestral Karras (DPM++ 2S a Karras)',
+    dpmpp_sde: 'DPM++ SDE',
+    dpmpp_sde_karras: 'DPM++ SDE Karras',
+    dpmpp_2m_sde: 'DPM++ 2M SDE',
+    dpmpp_2m_sde_gpu: 'DPM++ 2M SDE (GPU)',
+    dpmpp_2m_sde_karras: 'DPM++ 2M SDE Karras',
+    dpmpp_2m_sde_heun: 'DPM++ 2M SDE Heun',
+    dpmpp_2m_sde_heun_karras: 'DPM++ 2M SDE Heun Karras',
+    dpmpp_3m_sde: 'DPM++ 3M SDE',
+    dpmpp_3m_sde_karras: 'DPM++ 3M SDE Karras',
+    dpm2: 'DPM2',
+    dpm2_ancestral: 'DPM2 Ancestral (DPM2 a)',
+    dpm_fast: 'DPM Fast',
+    dpm_adaptive: 'DPM Adaptive',
+    lms: 'LMS',
+    heun: 'Heun',
     ddim: 'DDIM',
+    plms: 'PLMS',
+    unipc: 'UniPC',
     restart: 'Restart',
     sa_solver: 'SA-Solver',
     deis: 'DEIS',
@@ -31,6 +51,19 @@
 
   const samplerMeta = $derived(store.meta.find((s) => s.key === 'sampler'));
   const samplerOptions = $derived(samplerMeta?.options ?? []);
+
+  // 샘플러별 스케줄러 표시 (/api/samplers). 백엔드 미연결(fallback) 시에는 숨김.
+  let samplersInfo = $state(null);
+  $effect(() => {
+    if (store.apiOnline && samplersInfo === null) {
+      fetchSamplers().then((info) => { samplersInfo = info; });
+    }
+  });
+  const samplerInfo = $derived(
+    store.apiOnline && samplersInfo
+      ? samplersInfo[store.values.sampler] ?? null
+      : null
+  );
   const cfgMeta = $derived(store.meta.find((s) => s.key === 'cfg_scale'));
   const stepsMeta = $derived(store.meta.find((s) => s.key === 'steps'));
 
@@ -168,6 +201,11 @@
         {/each}
       </optgroup>
     </select>
+    {#if samplerInfo}
+      <div class="qp-scheduler">
+        {t('qp.schedulerLabel')}: {samplerInfo.scheduler}{samplerInfo.approximate ? ` ${t('qp.approxSuffix')}` : ''}
+      </div>
+    {/if}
     {#if cfgMeta}
       <QuickSlider setting={cfgMeta} />
     {/if}
@@ -181,6 +219,11 @@
 </details>
 
 <style>
+  .qp-scheduler {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-dim, #9aa0b4);
+  }
   .qp-lora-list {
     list-style: none;
     padding: 0;
