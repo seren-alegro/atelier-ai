@@ -371,3 +371,47 @@ describe('searchTags', () => {
     await expect(searchTags('hair')).rejects.toThrow('백엔드에 연결할 수 없어요.');
   });
 });
+
+describe('startDownload / fetchDownloadStatus', () => {
+  it('POST /api/downloads에 url·kind·pack_dir을 담아 보낸다', async () => {
+    mockFetchOnce(202, { job_id: 'dl123' });
+    const { startDownload } = await import('./api.js');
+    const res = await startDownload('https://x.com/m.safetensors', 'lora');
+    expect(res.job_id).toBe('dl123');
+    const [url, opts] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe(API + '/api/downloads');
+    const body = JSON.parse(opts.body);
+    expect(body.url).toBe('https://x.com/m.safetensors');
+    expect(body.kind).toBe('lora');
+    expect('pack_dir' in body).toBe(false);
+  });
+
+  it('pack이면 pack_dir을 함께 보낸다', async () => {
+    mockFetchOnce(202, { job_id: 'dl9' });
+    const { startDownload } = await import('./api.js');
+    await startDownload('https://x.com/dit.safetensors', 'pack', 'anima38');
+    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(body.kind).toBe('pack');
+    expect(body.pack_dir).toBe('anima38');
+  });
+
+  it('실패하면 detail 메시지를 던진다', async () => {
+    mockFetchOnce(400, { detail: '나쁜 URL' });
+    const { startDownload } = await import('./api.js');
+    await expect(startDownload('ftp://x', 'auto')).rejects.toThrow('나쁜 URL');
+  });
+
+  it('fetchDownloadStatus는 GET /api/downloads/{id}를 호출한다', async () => {
+    mockFetchOnce(200, { id: 'dl1', status: 'done' });
+    const { fetchDownloadStatus } = await import('./api.js');
+    const st = await fetchDownloadStatus('dl1');
+    expect(st.status).toBe('done');
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(API + '/api/downloads/dl1');
+  });
+
+  it('fetchDownloadStatus 실패 시 null', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('down'));
+    const { fetchDownloadStatus } = await import('./api.js');
+    expect(await fetchDownloadStatus('dl1')).toBeNull();
+  });
+});

@@ -686,3 +686,31 @@ export async function fetchSamplers() {
   }
   return _samplersInfo;
 }
+
+/** POST /api/downloads — URL 다운로드 시작. {job_id} 반환. */
+export async function startDownload(url, kind = 'auto', packDir = null) {
+  const body = { url, kind };
+  if (packDir) body.pack_dir = packDir;
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/downloads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(t('api.connectFail'));
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+/** GET /api/downloads/{id} — 진행 상태. 실패 시 null */
+export async function fetchDownloadStatus(jobId) {
+  try {
+    return await getJson('/api/downloads/' + encodeURIComponent(jobId));
+  } catch {
+    return null;
+  }
+}

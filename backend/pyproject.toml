@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "python-multipart>=0.0.18",  # PNG 메타 읽기(/api/png-info) multipart 업로드용
+    "httpx>=0.27",  # 모델 URL 다운로드(/api/downloads), Civitai API 조회용
     "uvicorn[standard]>=0.30",
     "pydantic>=2.0",
     # 생성 엔진 (무거움: uv sync 시 수 GB 다운로드. CUDA 사용자는

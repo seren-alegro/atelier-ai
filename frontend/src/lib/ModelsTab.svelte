@@ -11,11 +11,98 @@
     checkpoints,
     loras,
     controlnets,
+    anima38packs,
   } from './models.svelte.js';
+  import { startDownload, fetchDownloadStatus } from './api.js';
 
   const cps = $derived(checkpoints());
   const lrs = $derived(loras());
   const cns = $derived(controlnets());
+  const packs = $derived(anima38packs());
+
+  // -- URL 다운로드 ------------------------------------------------------
+  let dlUrl = $state('');
+  let dlKind = $state('auto');
+  let dlJob = $state(null); // {id, status, filename, downloaded_bytes, total_bytes, error}
+  let dlTimer = null;
+  let packUrls = $state({}); // pack name → url
+
+  function pollDownload() {
+    clearInterval(dlTimer);
+    dlTimer = setInterval(async () => {
+      if (!dlJob) {
+        clearInterval(dlTimer);
+        return;
+      }
+      const st = await fetchDownloadStatus(dlJob.id);
+      if (!st) return;
+      dlJob = st;
+      if (st.status === 'done') {
+        clearInterval(dlTimer);
+        dlUrl = '';
+        modelStore.notice = t('mdl.dlDone');
+        await rescanModels();
+      } else if (st.status === 'error') {
+        clearInterval(dlTimer);
+        modelStore.notice =
+          (st.error ? st.error + ' — ' : '') + t('mdl.dlFail');
+      }
+    }, 1000);
+  }
+
+  async function beginDownload(url, kind, packDir = null) {
+    url = (url ?? '').trim();
+    if (!url) return;
+    try {
+      const { job_id } = await startDownload(url, kind, packDir);
+      dlJob = {
+        id: job_id,
+        status: 'downloading',
+        filename: '',
+        downloaded_bytes: 0,
+        total_bytes: null,
+        error: null,
+      };
+      modelStore.notice = t('mdl.dlStarting');
+      pollDownload();
+    } catch (e) {
+      modelStore.notice = e.message || t('mdl.dlFail');
+    }
+  }
+
+  function onDownloadStart() {
+    beginDownload(dlUrl, dlKind);
+  }
+
+  function onPackDownload(packName) {
+    beginDownload(packUrls[packName], 'pack', packName);
+  }
+
+  function fmtDlBytes(b) {
+    if (b == null) return '?';
+    if (b >= 1024 ** 3) return (b / 1024 ** 3).toFixed(2) + ' GB';
+    if (b >= 1024 ** 2) return (b / 1024 ** 2).toFixed(1) + ' MB';
+    return Math.round(b / 1024) + ' KB';
+  }
+
+  function packRows(pack) {
+    const st = pack.pack_status ?? {};
+    return [
+      { label: t('mdl.packDit'), ok: !!st.dit, detail: st.dit ?? '' },
+      { label: t('mdl.packTe4b'), ok: !!st.qwen35_4b },
+      { label: t('mdl.packTe06b'), ok: !!st.qwen3_06b },
+      { label: t('mdl.packAdapter'), ok: !!st.adapter, detail: st.adapter ?? '' },
+      {
+        label: t('mdl.packTok'),
+        ok: (st.tokenizer_dirs ?? []).length > 0,
+      },
+      { label: t('mdl.packVae'), ok: !!st.vae_dir },
+    ];
+  }
+
+  function packIncomplete(pack) {
+    return packRows(pack).some((r) => !r.ok);
+  }
 
   function loraState(name) {
     if (!store.values.loras[name]) {
@@ -62,8 +149,56 @@
   </div>
   {#if modelStore.notice}<p class="notice">{modelStore.notice}</p>{/if}
 
+  <div class="dl-box">
+    <h4>{t('mdl.dlTitle')}</h4>
+    <div class="dl-row">
+      <input
+        class="text-input dl-url"
+        type="url"
+        bind:value={dlUrl}
+        placeholder={t('mdl.dlUrlPh')}
+      />
+      <select class="select" bind:value={dlKind} aria-label={t('mdl.dlTitle')}>
+        <option value="auto">{t('mdl.dlKindAuto')}</option>
+        <option value="checkpoint">{t('mdl.dlKindCkpt')}</option>
+        <option value="lora">{t('mdl.dlKindLora')}</option>
+      </select>
+      <button
+        class="btn"
+        onclick={onDownloadStart}
+        disabled={!dlUrl.trim() || (dlJob && dlJob.status === 'downloading')}
+      >
+        {t('mdl.dlStart')}
+      </button>
+    </div>
+    {#if dlJob}
+      <div class="dl-progress">
+        <span class="model-name">{dlJob.filename || dlJob.id}</span>
+        {#if dlJob.status === 'downloading'}
+          {#if dlJob.total_bytes}
+            {@const pct = Math.round(
+              (dlJob.downloaded_bytes / dlJob.total_bytes) * 100,
+            )}
+            <div class="bar"><div class="fill" style="width: {pct}%"></div></div>
+            <span class="model-meta">
+              {pct}% · {fmtDlBytes(dlJob.downloaded_bytes)} / {fmtDlBytes(
+                dlJob.total_bytes,
+              )}
+            </span>
+          {:else}
+            <span class="model-meta">{fmtDlBytes(dlJob.downloaded_bytes)} ↓</span>
+          {/if}
+        {:else if dlJob.status === 'done'}
+          <span class="badge">✓</span>
+        {:else}
+          <span class="model-meta">{dlJob.error ?? ''}</span>
+        {/if}
+      </div>
+    {/if}
+  </div>
+
   {#if modelStore.data}
-    {#if cps.length === 0 && lrs.length === 0}
+    {#if cps.length === 0 && lrs.length === 0 && packs.length === 0}
       <div class="gallery-empty">
         {t('mdl.empty')}<br />
         {t('mdl.emptyHint')}<br />
@@ -102,6 +237,49 @@
           </li>
         {/each}
       </ul>
+
+      <h4>{t('mdl.packTitle', { count: packs.length })}</h4>
+      {#if packs.length > 0}
+        <ul class="model-list">
+          {#each packs as p (p.name)}
+            <li class="pack-row">
+              <div class="pack-head">
+                <span class="model-name">{p.name}</span>
+                <span class="model-meta">{fmtSize(p.size_mb)}</span>
+              </div>
+              <ul class="pack-parts">
+                {#each packRows(p) as row}
+                  <li class={row.ok ? 'ok' : 'missing'}>
+                    <span>{row.ok ? '✓' : '✗'} {row.label}</span>
+                    {#if row.detail}<span class="model-meta">{row.detail}</span>{/if}
+                  </li>
+                {/each}
+              </ul>
+              {#if packIncomplete(p)}
+                <p class="hint">{t('mdl.packMissingHint')}</p>
+                <div class="dl-row">
+                  <input
+                    class="text-input dl-url"
+                    type="url"
+                    bind:value={packUrls[p.name]}
+                    placeholder={t('mdl.dlUrlPh')}
+                  />
+                  <button
+                    class="btn"
+                    onclick={() => onPackDownload(p.name)}
+                    disabled={!(packUrls[p.name] ?? '').trim() ||
+                      (dlJob && dlJob.status === 'downloading')}
+                  >
+                    {t('mdl.dlStart')}
+                  </button>
+                </div>
+              {:else}
+                <p class="hint ok-line">✓ {t('mdl.packComplete')}</p>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
 
       <h4>{t('mdl.loraTitle', { count: lrs.length })}</h4>
       {#if lrs.length === 0}
@@ -285,4 +463,70 @@
     color: var(--fg);
   }
   h4:first-of-type { margin-top: 0.6em; }
+  .dl-box {
+    background: linear-gradient(180deg, #23253f, var(--bg2));
+    border: 1px solid #35385f;
+    border-radius: 12px;
+    padding: 0.9em 1em;
+    margin-bottom: 1.2em;
+  }
+  .dl-box h4 { margin: 0 0 0.7em; }
+  .dl-row {
+    display: flex;
+    gap: 0.6em;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .dl-url { flex: 1 1 260px; min-width: 0; }
+  .dl-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    margin-top: 0.7em;
+  }
+  .bar {
+    flex: 1;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    min-width: 80px;
+  }
+  .fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #8aa8f5, #5a76c8);
+    transition: width 0.4s;
+  }
+  .pack-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pack-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+  }
+  .pack-parts {
+    list-style: none;
+    padding: 0.4em 0 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.3em 1em;
+    font-size: 0.88em;
+  }
+  .pack-parts li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5em;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+  }
+  .pack-parts li.ok { color: #9fe6a8; }
+  .pack-parts li.missing { color: #f2a3a3; }
+  .pack-row .hint { margin: 0.5em 0; }
+  .ok-line { color: #9fe6a8; }
 </style>
