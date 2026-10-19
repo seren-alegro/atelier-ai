@@ -1504,8 +1504,9 @@ class Anima2BPipeline:
 
     def _load_vae(self, vae_path: str, device, dtype):
         import torch
-        from diffusers import AutoencoderKL
-        vae = AutoencoderKL.from_single_file(
+        from diffusers import AutoencoderKLQwenImage
+        # Qwen-Image VAE 전용 클래스 사용
+        vae = AutoencoderKLQwenImage.from_single_file(
             vae_path, torch_dtype=dtype, trust_remote_code=False)
         vae.to(device=device, dtype=dtype)
         vae.eval()
