@@ -11,34 +11,51 @@ torch / transformers / safetensors / diffusers는 함수 안에서 lazy import
 torch가 필요한 nn.Module 정의는 build_* 팩토리 함수 안에 둔다
 (upscale.py의 _build_rrdbnet 패턴).
 
-== 덤프에서 확정된 사항 ==
-- DiT (Anima-3.8B-v1.1.safetensors): `net.blocks` 0..51 (52블록),
-  hidden 2048, MLP 8192 (fc1 [8192,2048] / fc2 [2048,8192] 각 52개),
-  블록당 [256,2048] 3개 + [6144,256] 3개 (rank-256 factorized QKV),
-  블록당 [128] 4개, `net.x_embedder.proj`, `net.t_embedder`,
-  `net.final_layer.adaln_modulation` (2개), `net.llm_adapter.blocks` 0..5.
+== v1.1 실측 사항 (2026-10-20 포드 헤더 덤프) ==
+- DiT (anima38B_11.safetensors): `net.blocks` 0..51 (52블록),
+  hidden 2048, MLP 8192 (layer1 [8192,2048] / layer2 [2048,8192]).
+- 블록당 adaLN-Zero 3종: adaln_modulation_{self_attn,cross_attn,mlp} =
+  Sequential(SiLU, Linear(2048,256), Linear(256,6144)) (bias 없음,
+  6144 = shift/scale/gate × 2048).
+- self_attn: q/k/v/output_proj [2048,2048], q_norm/k_norm [128] (per-head).
+- cross_attn: q [2048,2048], k/v [2048,1024], output [2048,2048],
+  q/k_norm [128] (16 q-heads / 8 kv-heads, GQA).
+- x_embedder.proj = Sequential(?, Linear(68,2048)) (bias 없음).
+  → 입력은 (B,T,68) 토큰. 68 = 16ch×2×2=64 + 4 (패딩, 추정).
+- t_embedder = [파라미터 없음, MLP(linear_1 [2048,2048] /
+  linear_2 [2048,6144])], t_embedding_norm [2048] (RMSNorm).
+  → temb(2048)을 6144=3×2048로 만들어 각 adaln에 분배 (추정).
+- pos_embedder: dim_spatial_range [21], dim_temporal_range [22], seq [256].
+- final_layer: adaln Sequential(SiLU, 2048→256→4096) (4096=shift/scale×2048)
+  + linear [64,2048] (16ch×2×2).
+- llm_adapter: 6× 트랜스포머 블록
+  (self/cross attn q/k/v/o [1024,1024]+q/k_norm [64],
+   mlp.0 [4096,1024]+b / mlp.2 [1024,4096]+b, norm×3 [1024]),
+  embed [32128,1024], norm [1024], out_proj [1024,1024]+b.
 - v2 커넥터 (DiT 파일 내장 + 독립 어댑터 파일, 동일 구조):
-  quality_anchor {query_norms×6, source_norms×6, semantic_attentions×6,
-  layer_mix_logits [6,4]}, semantic_resampler {blocks×6, time_mlp},
-  v2_attentions×6, v2_query_norms×6, v2_semantic_norms×6.
-  semantic_attentions 키 실측:
-  `{...}.k_norm.weight` [64], `{...}.k_proj.weight` [1024,2560],
-  `{...}.o_proj.weight` [1024,1024].
+  quality_anchor {query_norms [1024]×6, source_norms [2560]×6,
+  semantic_attentions×6 (q [1024,1024] / k/v [1024,2560] /
+  o [1024,1024], q/k_norm [64]), layer_mix_logits [6,4]},
+  semantic_resampler {query_tokens [1,64,2048],
+  layer_embeddings [4,1,2560], blocks×6
+  (self attn q/k/v/o [2048,2048],
+   cross attn q [2048,2048]/k/v [2048,2560]/o [2048,2048],
+   mlp_in [11264,2048]/mlp_out [2048,5632] (gated),
+   source_norm [2560] LayerNorm, time_modulation [12288,2048]+b),
+  time_mlp = Sequential(Linear(2048,2048)+b, SiLU, Linear+b),
+  output_norm [2048] LayerNorm, output_projection [1024,2048]},
+  v2_attentions×6 (q/k/v/o [1024,1024], q/k_norm [64]),
+  v2_query_norms/v2_semantic_norms [1024]×6.
 - Qwen3.5 4B TE: 키 prefix 없음 (`embed_tokens.weight`, `layers.N.*`),
   32 레이어, hidden 2560, 245개 텐서가 FP8_E4M3.
 - Qwen3 0.6B TE: 표준 Qwen3 레이아웃 (`model.layers` 28개, hidden 1024).
 - 토크나이저 분리: 0.6B용 Qwen/Qwen3-0.6B, 4B용 qwen35_tokenizer/ (공유 안 함).
 - VAE는 base와 공유.
 
-== 미확인 사항 (실측 필요, RunPod 24GB+) ==
-- DiT 블록당 [2048,2048] 351개의 귀속 (cross-attn q/o·adaLN 등으로 추정).
-- o_proj shape ([2048,6144]로 가정 — 6144=48heads×128).
-- num_heads=48, head_dim=128 (6144/128, [128] norm에서 추정).
-- adaLN 주입 방식 (adaLN-single 가정: 블록당 학습 테이블 + temb).
-- x_embedder patch_size/in_channels, t_embedder 내부, final_layer 구조.
-- llm_adapter / semantic_resampler 블록 내부 (shape 기반 추정 구현).
+== 미확인 사항 ==
+- x_embedder 입력 68차원의 정확한 구성 (64+4 패딩으로 가정).
+- temb 6144 분배 방식 (3×2048 chunk로 가정).
 - v2 커넥터의 정확한 데이터플로우 (모듈 구조는 키 이름대로, 연산 순서는 추정).
-- cross-attention cond 차원 (1024로 가정).
 - FP8 TE의 transformers 직접 로드 가능 여부 (폴백 구현됨).
 """
 
@@ -54,25 +71,23 @@ from dataclasses import dataclass, field
 
 @dataclass
 class AnimaDiTConfig:
-    """DiT 설정. 확정값은 덤프 실측, 나머지는 추정(미확인 표기)."""
+    """DiT 설정. v1.1 체크포인트 실측 shape 기준 (2026-10-20 포드에서 헤더 덤프)."""
 
-    num_layers: int = 52        # 확정: net.blocks 0..51
-    hidden_size: int = 2048     # 확정: 최다 shape
-    mlp_dim: int = 8192        # 확정: [8192,2048]/[2048,8192] 각 52개
-    qkv_rank: int = 256         # 확정: [256,2048] 3개/블록
-    qkv_up_dim: int = 6144      # 확정: [6144,256] 3개/블록
-    num_heads: int = 48         # 추정(미확인): 6144 = 48 × 128
-    head_dim: int = 128         # 추정(미확인): [128] norm 4개/블록
-    cond_dim: int = 1024        # 추정(미확인): 어댑터 [1024,*] 계열
-    patch_size: int = 2         # 미확인
-    in_channels: int = 4        # 미확인 (SDXL VAE latent 가정)
+    num_layers: int = 52        # 실측: net.blocks 0..51
+    hidden_size: int = 2048     # 실측: attn/MLP 주 차원
+    mlp_dim: int = 8192        # 실측: mlp.layer1 [8192,2048]
+    num_heads: int = 16         # 실측: 2048/128, q_norm [128]
+    head_dim: int = 128         # 실측: q_norm/k_norm [128]
+    cond_dim: int = 1024        # 실측: cross k/v [2048,1024]
+    patch_size: int = 2         # 실측: final linear [64,2048]=16ch×2×2
+    in_channels: int = 16       # 실측 추정: 출력 64=16×2×2
     # v2 커넥터
-    connector_layers: int = 6   # 확정: query_norms/source_norms 등 각 6개
-    connector_dim: int = 1024   # 확정: [1024,1024]/[1024,2560] 계열
-    resampler_dim: int = 2048   # 추정: [11264,2048]/[2048,5632] 계열
-    resampler_mlp_dim: int = 5632  # 추정: 11264 = 2 × 5632
-    te35_hidden: int = 2560     # 확정: Qwen3.5 4B hidden
-    te06_hidden: int = 1024     # 확정: Qwen3 0.6B hidden
+    connector_layers: int = 6   # 실측: 각 6개
+    connector_dim: int = 1024   # 실측
+    resampler_dim: int = 2048   # 실측
+    resampler_mlp_dim: int = 5632  # 실측: 11264 = 2 × 5632
+    te35_hidden: int = 2560     # 실측: Qwen3.5 4B hidden
+    te06_hidden: int = 1024     # 실측: Qwen3 0.6B hidden
 
 
 # 덤프에서 확인된 실제 키 이름 (테스트·매핑용)
@@ -95,8 +110,11 @@ CONFIRMED_DIT_KEYS = (
 )
 # semantic_attentions 블록의 덤프 실측 키 suffix
 CONFIRMED_SA_SUFFIXES = (
+    "q_norm.weight",   # [64]
+    "q_proj.weight",   # [1024,1024]
     "k_norm.weight",   # [64]
     "k_proj.weight",   # [1024,2560]
+    "v_proj.weight",   # [1024,2560]
     "o_proj.weight",   # [1024,1024]
 )
 
@@ -304,13 +322,19 @@ def apply_state_dict(module, state: dict, prefix: str = "") -> dict:
 def build_anima_dit(config: AnimaDiTConfig | None = None):
     """AnimaDiT 모듈을 생성한다. torch는 여기서 import.
 
-    구조 (확정/추정 구분은 모듈 docstring 참조):
-    - x_embedder: patchify conv (미확인: patch_size/in_channels)
-    - t_embedder: timestep MLP (미확인: 내부 구조)
-    - 52× AnimaDiTBlock: factorized self-attn (확정) + cross-attn (추정)
-      + MLP (확정) + adaLN-single (추정)
-    - final_layer: adaLN + unpatchify (미확인)
-    - llm_adapter: 6× residual MLP 블록 (shape 기반 추정)
+    v1.1 체크포인트 실측 shape 기준 (2026-10-20 포드 헤더 덤프):
+    - x_embedder.proj: Sequential(Identity, Linear(68, 2048, bias=False))
+    - t_embedder: ModuleList([Identity, TEmbedderMLP(linear_1/linear_2)])
+    - t_embedding_norm: [2048] (RMSNorm)
+    - pos_embedder: 버퍼 3개 (dim_spatial_range [21] 등)
+    - 52× 블록: self_attn q/k/v/o [2048,2048] + q/k_norm [128],
+      cross_attn q [2048,2048] + k/v [2048,1024] + o [2048,2048],
+      mlp layer1 [8192,2048]/layer2 [2048,8192],
+      adaln 3종 = Sequential(SiLU, Linear(2048,256), Linear(256,6144))
+      (6144 = shift/scale/gate × 2048)
+    - final_layer: adaln Sequential(SiLU, 2048→256→4096=shift/scale×2048)
+      + linear [64,2048] (16ch×2×2)
+    - llm_adapter: 6× 트랜스포머 블록 (1024-dim)
     - anima_v2_connector: 아래 build_connector_v2 참조
     """
     import torch
@@ -319,9 +343,9 @@ def build_anima_dit(config: AnimaDiTConfig | None = None):
     import math
 
     cfg = config or AnimaDiTConfig()
-    H, R, U = cfg.hidden_size, cfg.qkv_rank, cfg.qkv_up_dim
+    H = cfg.hidden_size
     NH, HD = cfg.num_heads, cfg.head_dim
-    assert U == NH * HD, "qkv_up_dim은 num_heads*head_dim이어야 함"
+    CD = cfg.cond_dim
 
     class _RMSNorm(nn.Module):
         def __init__(self, dim: int):
@@ -332,157 +356,210 @@ def build_anima_dit(config: AnimaDiTConfig | None = None):
             return F.rms_norm(x, (x.shape[-1],), self.weight)
 
     class _WeightParam(nn.Module):
-        """단일 weight 파라미터.
-
-        덤프 키가 `query_norms.0.weight`처럼 `.weight`으로 끝나므로
-        ParameterList 대신 이 모듈을 써서 키 이름을 정확히 맞춘다.
-        """
+        """단일 weight 파라미터 (`*.weight` 키와 정확히 매칭)."""
 
         def __init__(self, dim: int):
             super().__init__()
             self.weight = nn.Parameter(torch.ones(dim))
 
-        def forward(self):
-            return self.weight
-
     def _modulate(x, shift, scale):
         return x * (1 + scale) + shift
 
-    class FactorizedSelfAttention(nn.Module):
-        """rank-256 인수분해 self-attention (덤프 실측 shape).
-
-        q/k/v 각각: down Linear(H→R) [R,H] + up Linear(R→U) [U,R].
-        QK-norm은 head_dim=128 기준 per-head RMSNorm으로 추정 (미확인).
-        o_proj [H,U] shape은 top-20 밖에 있어 미확인이나 6144 정합성으로 가정.
-        """
+    class SelfAttention(nn.Module):
+        """실측: q/k/v/output_proj [2048,2048], q_norm/k_norm [128] (per-head)."""
 
         def __init__(self):
             super().__init__()
-            self.q_down = nn.Linear(H, R)
-            self.k_down = nn.Linear(H, R)
-            self.v_down = nn.Linear(H, R)
-            self.q_up = nn.Linear(R, U)
-            self.k_up = nn.Linear(R, U)
-            self.v_up = nn.Linear(R, U)
-            self.q_norm = _RMSNorm(HD)  # [128] — 미확인(축 추정)
-            self.k_norm = _RMSNorm(HD)  # [128] — 미확인(축 추정)
-            self.o_proj = nn.Linear(U, H)  # [H,U] — 미확인(shape 가정)
+            self.q_proj = nn.Linear(H, H, bias=False)
+            self.k_proj = nn.Linear(H, H, bias=False)
+            self.v_proj = nn.Linear(H, H, bias=False)
+            self.q_norm = _RMSNorm(HD)
+            self.k_norm = _RMSNorm(HD)
+            self.output_proj = nn.Linear(H, H, bias=False)
 
         def forward(self, x):
             b, t, _ = x.shape
-            q = self.q_up(self.q_down(x)).view(b, t, NH, HD)
-            k = self.k_up(self.k_down(x)).view(b, t, NH, HD)
-            v = self.v_up(self.v_down(x)).view(b, t, NH, HD)
-            q = self.q_norm(q)
-            k = self.k_norm(k)
-            q = q.transpose(1, 2)
-            k = k.transpose(1, 2)
-            v = v.transpose(1, 2)
-            out = F.scaled_dot_product_attention(q, k, v)
-            out = out.transpose(1, 2).reshape(b, t, U)
-            return self.o_proj(out)
+            q = self.q_norm(self.q_proj(x).view(b, t, NH, HD))
+            k = self.k_norm(self.k_proj(x).view(b, t, NH, HD))
+            v = self.v_proj(x).view(b, t, NH, HD)
+            out = F.scaled_dot_product_attention(
+                q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2))
+            return self.output_proj(out.transpose(1, 2).reshape(b, t, H))
 
     class CrossAttention(nn.Module):
-        """cond(1024-dim, 추정)에 대한 cross-attention.
+        """실측: q [2048,2048], k/v [2048,1024], o [2048,2048].
 
-        k/v [H,cond] shape은 덤프에서 블록당 2개로 확정.
-        q/o [H,H]는 미확인(가정).
+        16 q-heads × 8 kv-heads (GQA) — k/v를 repeat해서 맞춘다.
         """
 
         def __init__(self):
             super().__init__()
-            self.q_proj = nn.Linear(H, H)  # 미확인
-            self.k_proj = nn.Linear(cfg.cond_dim, H)  # 확정 shape
-            self.v_proj = nn.Linear(cfg.cond_dim, H)  # 확정 shape
-            self.o_proj = nn.Linear(H, H)  # 미확인
+            self.q_proj = nn.Linear(H, H, bias=False)
+            self.k_proj = nn.Linear(CD, H, bias=False)
+            self.v_proj = nn.Linear(CD, H, bias=False)
+            self.q_norm = _RMSNorm(HD)
+            self.k_norm = _RMSNorm(HD)
+            self.output_proj = nn.Linear(H, H, bias=False)
 
         def forward(self, x, cond):
             b, t, _ = x.shape
-            ch = max(1, H // HD)  # cross-attention head 수 (미확인)
-            hd = H // ch
-            q = self.q_proj(x).view(b, t, ch, hd).transpose(1, 2)
-            k = self.k_proj(cond).view(b, -1, ch, hd).transpose(1, 2)
-            v = self.v_proj(cond).view(b, -1, ch, hd).transpose(1, 2)
+            n_kv = max(1, CD // HD)
+            rep = max(1, NH // n_kv)
+            q = self.q_norm(self.q_proj(x).view(b, t, NH, HD)).transpose(1, 2)
+            k = self.k_norm(
+                self.k_proj(cond).view(b, -1, n_kv, HD)).transpose(1, 2)
+            v = self.v_proj(cond).view(b, -1, n_kv, HD).transpose(1, 2)
+            k = k.repeat_interleave(rep, dim=1)
+            v = v.repeat_interleave(rep, dim=1)
             out = F.scaled_dot_product_attention(q, k, v)
-            out = out.transpose(1, 2).reshape(b, t, H)
-            return self.o_proj(out)
+            return self.output_proj(out.transpose(1, 2).reshape(b, t, H))
 
-    class AnimaDiTBlock(nn.Module):
-        """DiT 블록 1개.
-
-        adaLN 주입은 adaLN-single 방식(학습 테이블 + temb)으로 추정 —
-        블록당 대형 modulation 선형층이 덤프에 없기 때문 (미확인).
-        """
+    class _Mlp(nn.Module):
+        """실측: mlp.layer1 [8192,2048], mlp.layer2 [2048,8192]."""
 
         def __init__(self):
             super().__init__()
+            self.layer1 = nn.Linear(H, cfg.mlp_dim, bias=False)
+            self.layer2 = nn.Linear(cfg.mlp_dim, H, bias=False)
+
+        def forward(self, x):
+            return self.layer2(F.gelu(self.layer1(x), approximate="tanh"))
+
+    def _adaln_mlp(out_dim: int):
+        # 실측: Sequential(SiLU, Linear(2048,256), Linear(256,out_dim)), bias 없음
+        return nn.Sequential(
+            nn.SiLU(), nn.Linear(H, 256, bias=False),
+            nn.Linear(256, out_dim, bias=False))
+
+    class AnimaDiTBlock(nn.Module):
+        """DiT 블록 1개 — adaLN-Zero (경로별 shift/scale/gate)."""
+
+        def __init__(self):
+            super().__init__()
+            # 블록 norm 가중치가 체크포인트에 없음 → affine 없는 LayerNorm
             self.norm1 = nn.LayerNorm(H, elementwise_affine=False)
-            self.attn = FactorizedSelfAttention()
+            self.self_attn = SelfAttention()
             self.norm2 = nn.LayerNorm(H, elementwise_affine=False)
             self.cross_attn = CrossAttention()
             self.norm3 = nn.LayerNorm(H, elementwise_affine=False)
-            self.mlp_fc1 = nn.Linear(H, cfg.mlp_dim)  # 확정 [8192,2048]
-            self.mlp_fc2 = nn.Linear(cfg.mlp_dim, H)  # 확정 [2048,8192]
-            # adaLN-single 테이블: shift/scale/gate × (attn, cross, mlp)
-            # [6,H] — top-20 밖이라 미확인이나 부재와 정합
-            self.scale_shift_table = nn.Parameter(torch.zeros(6, H))
+            self.mlp = _Mlp()
+            self.adaln_modulation_self_attn = _adaln_mlp(3 * H)
+            self.adaln_modulation_cross_attn = _adaln_mlp(3 * H)
+            self.adaln_modulation_mlp = _adaln_mlp(3 * H)
 
-        def forward(self, x, temb, cond):
-            s = self.scale_shift_table + temb.unsqueeze(1)  # (B, 6, H)
-            (shift_msa, scale_msa, gate_msa,
-             shift_mlp, scale_mlp, gate_mlp) = (
-                c.squeeze(1) for c in s.chunk(6, dim=1)
-            )
-            x = x + gate_msa * self.attn(_modulate(self.norm1(x), shift_msa, scale_msa))
+        def forward(self, x, t_sa, t_xa, t_mlp, cond):
+            b = x.shape[0]
+            shift, scale, gate = self.adaln_modulation_self_attn(
+                t_sa).view(b, 3, H).unbind(1)
+            h = _modulate(self.norm1(x), shift.unsqueeze(1), scale.unsqueeze(1))
+            x = x + gate.unsqueeze(1) * self.self_attn(h)
             if cond is not None:
-                # cross는 같은 gate를 재사용 (미확인)
-                x = x + gate_msa * self.cross_attn(
-                    _modulate(self.norm2(x), shift_msa, scale_msa), cond)
-            h = _modulate(self.norm3(x), shift_mlp, scale_mlp)
-            h = self.mlp_fc2(F.gelu(self.mlp_fc1(h), approximate="tanh"))
-            return x + gate_mlp * h
+                shift, scale, gate = self.adaln_modulation_cross_attn(
+                    t_xa).view(b, 3, H).unbind(1)
+                h = _modulate(self.norm2(x), shift.unsqueeze(1),
+                              scale.unsqueeze(1))
+                x = x + gate.unsqueeze(1) * self.cross_attn(h, cond)
+            shift, scale, gate = self.adaln_modulation_mlp(
+                t_mlp).view(b, 3, H).unbind(1)
+            h = _modulate(self.norm3(x), shift.unsqueeze(1), scale.unsqueeze(1))
+            return x + gate.unsqueeze(1) * self.mlp(h)
 
-    class LLMAdapterBlock(nn.Module):
-        """llm_adapter 블록 (shape 기반 추정 — 미확인).
-
-        덤프: 블록당 [4096,1024] + [1024,4096] + [4096] 각 1개.
-        """
+    class _Attn1024(nn.Module):
+        """llm_adapter용 1024-dim attention (q/k/v/o [1024,1024], norm [64])."""
 
         def __init__(self):
             super().__init__()
-            self.norm = _RMSNorm(4096)  # [4096] — 용도 추정
-            self.fc1 = nn.Linear(1024, 4096)
-            self.fc2 = nn.Linear(4096, 1024)
+            self.q_proj = nn.Linear(1024, 1024, bias=False)
+            self.k_proj = nn.Linear(1024, 1024, bias=False)
+            self.v_proj = nn.Linear(1024, 1024, bias=False)
+            self.q_norm = _RMSNorm(64)
+            self.k_norm = _RMSNorm(64)
+            self.o_proj = nn.Linear(1024, 1024, bias=False)
+
+        def forward(self, x, context=None):
+            b, t, _ = x.shape
+            kv = x if context is None else context
+            s = kv.shape[1]
+            nh = 1024 // 64
+            q = self.q_norm(self.q_proj(x).view(b, t, nh, 64))
+            k = self.k_norm(self.k_proj(kv).view(b, s, nh, 64))
+            v = self.v_proj(kv).view(b, s, nh, 64)
+            out = F.scaled_dot_product_attention(
+                q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2))
+            return self.o_proj(out.transpose(1, 2).reshape(b, t, 1024))
+
+    class LLMAdapterBlock(nn.Module):
+        """llm_adapter 블록 실측: self/cross attn + mlp(0/2) + norm 3개."""
+
+        def __init__(self):
+            super().__init__()
+            self.self_attn = _Attn1024()
+            self.cross_attn = _Attn1024()
+            self.mlp = nn.Sequential(
+                nn.Linear(1024, 4096), nn.SiLU(), nn.Linear(4096, 1024))
+            self.norm_self_attn = _RMSNorm(1024)
+            self.norm_cross_attn = _RMSNorm(1024)
+            self.norm_mlp = _RMSNorm(1024)
+
+        def forward(self, x, context=None):
+            x = x + self.self_attn(self.norm_self_attn(x))
+            if context is not None:
+                x = x + self.cross_attn(self.norm_cross_attn(x), context)
+            return x + self.mlp(self.norm_mlp(x))
+
+    class TEmbedderMLP(nn.Module):
+        """t_embedder[1] 실측: linear_1 [2048,2048], linear_2 [2048,6144]."""
+
+        def __init__(self):
+            super().__init__()
+            self.linear_1 = nn.Linear(H, H, bias=False)
+            self.linear_2 = nn.Linear(H, 3 * H, bias=False)
 
         def forward(self, x):
-            return x + self.fc2(F.gelu(self.fc1(self.norm(x))))
+            return self.linear_2(F.silu(self.linear_1(x)))
+
+    class XEmbedder(nn.Module):
+        """x_embedder 실측: proj = Sequential(?, Linear(68, 2048))."""
+
+        def __init__(self):
+            super().__init__()
+            self.proj = nn.Sequential(
+                nn.Identity(), nn.Linear(68, H, bias=False))
+
+        def forward(self, x):
+            return self.proj(x)
 
     class AnimaDiT(nn.Module):
         def __init__(self):
             super().__init__()
             self.cfg = cfg
-            # 미확인: in_channels/patch_size (SDXL VAE latent 가정)
-            self.x_embedder = nn.Conv2d(cfg.in_channels, H,
-                                        kernel_size=cfg.patch_size,
-                                        stride=cfg.patch_size)
-            # t_embedder 내부 구조 미확인 — 2층 MLP로 가정
-            self.t_embedder = nn.Sequential(
-                nn.Linear(256, H), nn.SiLU(), nn.Linear(H, H),
-            )
+            self.x_embedder = XEmbedder()
+            # t_embedder[0]은 파라미터 없음, [1]이 linear_1/linear_2
+            self.t_embedder = nn.ModuleList([nn.Identity(), TEmbedderMLP()])
+            self.t_embedding_norm = _RMSNorm(H)
+            self.pos_embedder = nn.Module()
+            self.pos_embedder.register_buffer(
+                "dim_spatial_range", torch.zeros(21))
+            self.pos_embedder.register_buffer(
+                "dim_temporal_range", torch.zeros(22))
+            self.pos_embedder.register_buffer("seq", torch.zeros(256))
             self.blocks = nn.ModuleList([AnimaDiTBlock()
                                          for _ in range(cfg.num_layers)])
-            self.llm_adapter = nn.ModuleList([LLMAdapterBlock()
-                                              for _ in range(6)])
+            # llm_adapter 실측 키: llm_adapter.blocks.0~5 / .embed / .norm / .out_proj
+            _llm_adapter = nn.Module()
+            _llm_adapter.blocks = nn.ModuleList([LLMAdapterBlock()
+                                                 for _ in range(6)])
+            _llm_adapter.embed = nn.Embedding(32128, 1024)
+            _llm_adapter.norm = _RMSNorm(1024)
+            _llm_adapter.out_proj = nn.Linear(1024, 1024)
+            self.llm_adapter = _llm_adapter
             self.anima_v2_connector = build_connector_v2(cfg)
-            # final_layer: adaln_modulation 2개(덤프 실측, 용도 미확인) + 투영
             self.final_layer = nn.ModuleDict({
-                "adaln_modulation": nn.ModuleList(
-                    [nn.Linear(H, H), nn.Linear(H, H)]),
-                "proj": nn.Linear(H, cfg.patch_size * cfg.patch_size
-                                  * cfg.in_channels),
+                "adaln_modulation": _adaln_mlp(2 * H),
+                "linear": nn.Linear(H, 64, bias=False),
             })
 
-        def timestep_embedding(self, timesteps, dim=256, max_period=10000):
+        def timestep_embedding(self, timesteps, dim=2048, max_period=10000):
             half = dim // 2
             freqs = torch.exp(
                 -math.log(max_period)
@@ -491,14 +568,29 @@ def build_anima_dit(config: AnimaDiTConfig | None = None):
             return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
 
         def forward(self, x, timesteps, cond=None):
-            # x: (B, C, h, w) latent
-            temb = self.t_embedder(self.timestep_embedding(timesteps))
-            h = self.x_embedder(x)  # (B, H, gh, gw)
-            b, _, gh, gw = h.shape
-            h = h.flatten(2).transpose(1, 2)  # (B, T, H)
+            # x: (B, C, h, w) latent → patchify(p=2) → (B, T, C*4) → 68로 맞춤
+            b, c, h, w = x.shape
+            p = cfg.patch_size
+            gh, gw = h // p, w // p
+            tok = x.unfold(2, p, p).unfold(3, p, p)
+            tok = tok.permute(0, 2, 3, 1, 4, 5).reshape(b, gh * gw, c * p * p)
+            if tok.shape[-1] < 68:
+                tok = F.pad(tok, (0, 68 - tok.shape[-1]))
+            elif tok.shape[-1] > 68:
+                tok = tok[..., :68]
+            h_tok = self.x_embedder(tok)  # (B, T, 2048)
+            # temb 3종: t_embedder[1] 출력(6144)을 3×2048로 나눠 각 adaln에
+            temb = self.t_embedding_norm(self.timestep_embedding(timesteps, dim=H))
+            temb3 = self.t_embedder[1](temb)
+            t_sa, t_xa, t_mlp = temb3.chunk(3, dim=-1)
             for blk in self.blocks:
-                h = blk(h, temb, cond)
-            return h, (b, gh, gw)
+                h_tok = blk(h_tok, t_sa, t_xa, t_mlp, cond)
+            shift, scale = self.final_layer["adaln_modulation"](
+                temb).view(b, 2, H).unbind(1)
+            h_tok = _modulate(F.layer_norm(h_tok, (H,)),
+                              shift.unsqueeze(1), scale.unsqueeze(1))
+            out = self.final_layer["linear"](h_tok)  # (B, T, 64)
+            return out, (b, gh, gw)
 
     return AnimaDiT()
 
@@ -510,16 +602,22 @@ def build_anima_dit(config: AnimaDiTConfig | None = None):
 def build_connector_v2(config: AnimaDiTConfig | None = None):
     """anima_qwen35_quality_anchored_semantic_connector_v2.
 
-    덤프 실측 키 이름 그대로 사용:
-    - quality_anchor.query_norms.{i}.weight (6)
-    - quality_anchor.source_norms.{i}.weight (6)
-    - quality_anchor.semantic_attentions.{i}.{k_norm,k_proj,o_proj}.weight (6)
-    - quality_anchor.layer_mix_logits [6,4]
-    - semantic_resampler.blocks.{i} (6), semantic_resampler.time_mlp
-    - v2_attentions.{i} (6), v2_query_norms.{i} (6),
-      v2_semantic_norms.{i} (6)
+    v1.1 체크포인트 실측 shape 기준 (2026-10-20 포드 헤더 덤프):
+    - quality_anchor: query_norms [1024]×6, source_norms [2560]×6,
+      semantic_attentions×6 (q/k/v/o [1024,1024] except k/v [1024,2560],
+      q/k_norm [64]), layer_mix_logits [6,4]
+    - semantic_resampler: query_tokens [1,64,2048],
+      layer_embeddings [4,1,2560], blocks×6
+      (self_attention q/k/v/o [2048,2048],
+       cross_attention q [2048,2048]/k/v [2048,2560]/o [2048,2048],
+       mlp_in [11264,2048]/mlp_out [2048,5632] (gated),
+       source_norm [2560] (LayerNorm), time_modulation [12288,2048]+b),
+      time_mlp = Sequential(Linear(2048,2048)+b, SiLU, Linear+b),
+      output_norm [2048] (LayerNorm), output_projection [1024,2048]
+    - v2_attentions×6: q/k/v/o [1024,1024], q/k_norm [64]
+    - v2_query_norms/v2_semantic_norms [1024]×6
 
-    연산 순서는 추정(미확인). 모듈 계층·파라미터 이름·shape은 덤프와 일치.
+    연산 순서는 추정. 모듈 계층·파라미터 이름·shape은 실측과 일치.
     """
     import torch
     import torch.nn as nn
@@ -528,46 +626,58 @@ def build_connector_v2(config: AnimaDiTConfig | None = None):
     cfg = config or AnimaDiTConfig()
     D, T35 = cfg.connector_dim, cfg.te35_hidden
     L = cfg.connector_layers
+    RD = cfg.resampler_dim
+
+    class _RMSNorm(nn.Module):
+        def __init__(self, dim: int):
+            super().__init__()
+            self.weight = nn.Parameter(torch.ones(dim))
+
+        def forward(self, x):
+            return F.rms_norm(x, (x.shape[-1],), self.weight)
 
     class _WeightParam(nn.Module):
-        """단일 weight 파라미터 (덤프 키 `*.weight`와 정확히 매칭)."""
+        """단일 weight 파라미터 (`*.weight` 키와 정확히 매칭)."""
 
         def __init__(self, dim: int):
             super().__init__()
             self.weight = nn.Parameter(torch.ones(dim))
 
-    class SemanticAttention(nn.Module):
-        """quality_anchor.semantic_attentions[i].
+    def _modulate(x, shift, scale):
+        return x * (1 + scale) + shift
 
-        확정 키: k_norm.weight [64], k_proj.weight [1024,2560],
-        o_proj.weight [1024,1024].
-        """
+    class SemanticAttention(nn.Module):
+        """quality_anchor.semantic_attentions[i] (실측 shape)."""
 
         def __init__(self):
             super().__init__()
-            self.k_norm = _WeightParam(64)  # [64] — 축 미확인
-            self.k_proj = nn.Linear(T35, D)  # [1024,2560] 확정
-            self.o_proj = nn.Linear(D, D)  # [1024,1024] 확정
+            self.q_proj = nn.Linear(D, D, bias=False)
+            self.k_proj = nn.Linear(T35, D, bias=False)
+            self.v_proj = nn.Linear(T35, D, bias=False)
+            self.q_norm = _RMSNorm(64)
+            self.k_norm = _RMSNorm(64)
+            self.o_proj = nn.Linear(D, D, bias=False)
 
         def forward(self, queries, te_hidden):
-            # queries: (B, Q, D), te_hidden: (B, T, 2560)
-            k = self.k_proj(te_hidden)
-            # k_norm [64]: head-dim 기준 추정 — 여기서는 단순 스케일로 적용
-            # (정확한 축은 실측 필요)
-            k = k * (self.k_norm.weight.mean())
+            b, qn, _ = queries.shape
+            t = te_hidden.shape[1]
+            nh = max(1, D // 64)
+            q = self.q_norm(self.q_proj(queries).view(b, qn, nh, 64))
+            k = self.k_norm(self.k_proj(te_hidden).view(b, t, nh, 64))
+            v = self.v_proj(te_hidden).view(b, t, nh, 64)
             attn = torch.softmax(
-                queries @ k.transpose(-2, -1) / (D ** 0.5), dim=-1)
-            return self.o_proj(attn @ te_hidden[:, :, :D]
-                               if te_hidden.shape[-1] == D else attn @ k)
+                q.transpose(1, 2) @ k.transpose(1, 2).transpose(-2, -1)
+                / (64 ** 0.5), dim=-1)
+            out = attn @ v.transpose(1, 2)
+            return self.o_proj(out.transpose(1, 2).reshape(b, qn, D))
 
     class QualityAnchor(nn.Module):
         def __init__(self):
             super().__init__()
-            # 덤프 키: query_norms.{i}.weight (ModuleList+_WeightParam으로 맞춤)
             self.query_norms = nn.ModuleList(
-                [_WeightParam(64) for _ in range(L)])
+                [_WeightParam(D) for _ in range(L)])
             self.source_norms = nn.ModuleList(
-                [_WeightParam(64) for _ in range(L)])
+                [_WeightParam(T35) for _ in range(L)])
             self.semantic_attentions = nn.ModuleList(
                 [SemanticAttention() for _ in range(L)])
             self.layer_mix_logits = nn.Parameter(torch.zeros(L, 4))
@@ -576,74 +686,124 @@ def build_connector_v2(config: AnimaDiTConfig | None = None):
             outs = []
             for i in range(L):
                 sa = self.semantic_attentions[i]
-                q = queries * self.query_norms[i].weight.mean()
-                outs.append(sa(q, te_hidden))
+                q = queries * self.query_norms[i].weight
+                src = te_hidden * self.source_norms[i].weight
+                outs.append(sa(q, src))
             mix = torch.softmax(self.layer_mix_logits, dim=-1)
             stacked = torch.stack(outs, dim=0)  # (L, B, Q, D)
-            # [6,4] 가중치로 레이어 혼합 (정확한 의미는 실측 필요)
-            w = mix.mean(dim=-1)  # (L,)
+            w = mix.mean(dim=-1)  # (L,) — 4개 레이어 가중치 평균 (추정)
             return (stacked * w.view(L, 1, 1, 1)).sum(dim=0)
 
     class ResamplerBlock(nn.Module):
-        """semantic_resampler.blocks[i] (shape 기반 추정 — 미확인).
-
-        덤프: [11264,2048]=2048→2×5632 (gated MLP),
-        [2048,5632], [12288]+[12288,2048] (adaLN-Zero modulation).
-        """
+        """semantic_resampler.blocks[i] (실측 shape)."""
 
         def __init__(self):
             super().__init__()
-            rd, rm = cfg.resampler_dim, cfg.resampler_mlp_dim
-            self.modulation = nn.Sequential(
-                nn.SiLU(), nn.Linear(rd, 6 * rd))
-            self.gate_proj = nn.Linear(rd, 2 * rm)
-            self.down_proj = nn.Linear(rm, rd)
+            self.self_attention = _SelfAttn2048()
+            self.cross_attention = _CrossAttn2048()
+            self.mlp_in = nn.Linear(RD, 2 * cfg.resampler_mlp_dim,
+                                    bias=False)
+            self.mlp_out = nn.Linear(cfg.resampler_mlp_dim, RD, bias=False)
+            self.source_norm = nn.LayerNorm(T35)
+            self.time_modulation = nn.Linear(RD, 6 * RD)  # bias 있음
+            self.norm1 = nn.LayerNorm(RD, elementwise_affine=False)
+            self.norm2 = nn.LayerNorm(RD, elementwise_affine=False)
+            self.norm3 = nn.LayerNorm(RD, elementwise_affine=False)
 
-        def forward(self, x, temb):
-            # temb: (B, resampler_dim) — time_mlp 출력으로 가정
-            mod = self.modulation(temb).view(
-                x.shape[0], 6, -1)
-            shift = mod[:, 0]
-            # gated MLP (추정)
-            g = self.gate_proj(x)
-            a, b = g.chunk(2, dim=-1)
-            h = self.down_proj(a * F.silu(b))
-            return x + h * torch.sigmoid(shift).unsqueeze(1)
+        def forward(self, x, source, temb):
+            b = x.shape[0]
+            mod = self.time_modulation(temb).view(b, 6, RD)
+            s_sft, s_scl, s_gte = mod[:, 0], mod[:, 1], mod[:, 2]
+            m_sft, m_scl, m_gte = mod[:, 3], mod[:, 4], mod[:, 5]
+            h = _modulate(self.norm1(x), s_sft.unsqueeze(1), s_scl.unsqueeze(1))
+            x = x + s_gte.unsqueeze(1) * self.self_attention(h)
+            src = self.source_norm(source)
+            x = x + self.cross_attention(self.norm2(x), src)
+            h = _modulate(self.norm3(x), m_sft.unsqueeze(1), m_scl.unsqueeze(1))
+            g = self.mlp_in(h)
+            a, bb = g.chunk(2, dim=-1)
+            h = self.mlp_out(a * F.silu(bb))
+            return x + m_gte.unsqueeze(1) * h
+
+    class _SelfAttn2048(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.q_proj = nn.Linear(RD, RD, bias=False)
+            self.k_proj = nn.Linear(RD, RD, bias=False)
+            self.v_proj = nn.Linear(RD, RD, bias=False)
+            self.o_proj = nn.Linear(RD, RD, bias=False)
+
+        def forward(self, x):
+            b, t, _ = x.shape
+            nh = max(1, RD // 128)
+            q = self.q_proj(x).view(b, t, nh, 128).transpose(1, 2)
+            k = self.k_proj(x).view(b, t, nh, 128).transpose(1, 2)
+            v = self.v_proj(x).view(b, t, nh, 128).transpose(1, 2)
+            out = F.scaled_dot_product_attention(q, k, v)
+            return self.o_proj(out.transpose(1, 2).reshape(b, t, RD))
+
+    class _CrossAttn2048(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.q_proj = nn.Linear(RD, RD, bias=False)
+            self.k_proj = nn.Linear(T35, RD, bias=False)
+            self.v_proj = nn.Linear(T35, RD, bias=False)
+            self.o_proj = nn.Linear(RD, RD, bias=False)
+
+        def forward(self, x, source):
+            b, t, _ = x.shape
+            s = source.shape[1]
+            nh = max(1, RD // 128)
+            q = self.q_proj(x).view(b, t, nh, 128).transpose(1, 2)
+            k = self.k_proj(source).view(b, s, nh, 128).transpose(1, 2)
+            v = self.v_proj(source).view(b, s, nh, 128).transpose(1, 2)
+            out = F.scaled_dot_product_attention(q, k, v)
+            return self.o_proj(out.transpose(1, 2).reshape(b, t, RD))
 
     class V2Attention(nn.Module):
-        """v2_attentions[i] (구조 추정).
-
-        덤프에서 v2_query_norms / v2_semantic_norms는 별도 indexed 그룹이므로
-        norm은 어텐션 밖에 둔다.
-        """
+        """v2_attentions[i] (실측: q/k/v/o [1024,1024], q/k_norm [64])."""
 
         def __init__(self):
             super().__init__()
-            self.q_proj = nn.Linear(D, D)
-            self.k_proj = nn.Linear(D, D)
-            self.v_proj = nn.Linear(D, D)
-            self.o_proj = nn.Linear(D, D)
+            self.q_proj = nn.Linear(D, D, bias=False)
+            self.k_proj = nn.Linear(D, D, bias=False)
+            self.v_proj = nn.Linear(D, D, bias=False)
+            self.q_norm = _RMSNorm(64)
+            self.k_norm = _RMSNorm(64)
+            self.o_proj = nn.Linear(D, D, bias=False)
 
         def forward(self, queries, semantics, q_scale=1.0, s_scale=1.0):
-            q = self.q_proj(queries) * q_scale
-            k = self.k_proj(semantics) * s_scale
-            v = self.v_proj(semantics)
-            attn = torch.softmax(q @ k.transpose(-2, -1) / (D ** 0.5), -1)
-            return self.o_proj(attn @ v)
+            b, qn, _ = queries.shape
+            s = semantics.shape[1]
+            nh = max(1, D // 64)
+            q = self.q_norm(self.q_proj(queries).view(b, qn, nh, 64))
+            k = self.k_norm(self.k_proj(semantics).view(b, s, nh, 64))
+            v = self.v_proj(semantics).view(b, s, nh, 64)
+            attn = torch.softmax(
+                q.transpose(1, 2) @ k.transpose(1, 2).transpose(-2, -1)
+                / (64 ** 0.5) * q_scale * s_scale, dim=-1)
+            out = attn @ v.transpose(1, 2)
+            return self.o_proj(out.transpose(1, 2).reshape(b, qn, D))
 
     class SemanticResampler(nn.Module):
-        """semantic_resampler (덤프 키 이름 그대로).
-
-        time_mlp: Sequential(Linear, SiLU, Linear) → 가중치 2개
-        (time_mlp.0.weight / time_mlp.2.weight, 덤프 count=2와 일치).
-        """
-
         def __init__(self):
             super().__init__()
-            rd = cfg.resampler_dim
             self.blocks = nn.ModuleList([ResamplerBlock() for _ in range(L)])
             self.time_mlp = nn.Sequential(
-                nn.Linear(rd, rd), nn.SiLU(), nn.Linear(rd, rd))
+                nn.Linear(RD, RD), nn.SiLU(), nn.Linear(RD, RD))
+            self.query_tokens = nn.Parameter(torch.randn(1, 64, RD))
+            self.layer_embeddings = nn.Parameter(torch.randn(4, 1, T35))
+            self.output_norm = nn.LayerNorm(RD)
+            self.output_projection = nn.Linear(RD, D, bias=False)
+
+        def forward(self, te_hidden, temb):
+            b = te_hidden.shape[0]
+            x = self.query_tokens.expand(b, -1, -1)
+            t = self.time_mlp(temb)
+            for blk in self.blocks:
+                x = blk(x, te_hidden, t)
+            x = self.output_norm(x)
+            return self.output_projection(x)  # (B, 64, 1024)
 
     class ConnectorV2(nn.Module):
         def __init__(self):
@@ -652,37 +812,26 @@ def build_connector_v2(config: AnimaDiTConfig | None = None):
             self.semantic_resampler = SemanticResampler()
             self.v2_attentions = nn.ModuleList(
                 [V2Attention() for _ in range(L)])
-            # 덤프 키: v2_query_norms.{i}.weight / v2_semantic_norms.{i}.weight
             self.v2_query_norms = nn.ModuleList(
-                [_WeightParam(64) for _ in range(L)])
+                [_WeightParam(D) for _ in range(L)])
             self.v2_semantic_norms = nn.ModuleList(
-                [_WeightParam(64) for _ in range(L)])
-            # 학습 쿼리 (개수 미확인 — 32로 가정)
+                [_WeightParam(D) for _ in range(L)])
             self.latent_queries = nn.Parameter(torch.randn(32, D))
-            # 차원 연결 투영 (미확인 — 덤프에 대응 키 미확인)
-            self.anchor_to_resampler = nn.Linear(D, cfg.resampler_dim)
-            self.resampler_to_cond = nn.Linear(cfg.resampler_dim, D)
 
         def forward(self, te35_hidden, temb=None):
             b = te35_hidden.shape[0]
+            dev = te35_hidden.device
             queries = self.latent_queries.unsqueeze(0).expand(b, -1, -1)
-            anchored = self.quality_anchor(queries, te35_hidden)  # (B,Q,1024)
-            # resampler 차원(2048, 추정)으로 투영 — 미확인
-            h = self.anchor_to_resampler(anchored)
-            t = self.semantic_resampler.time_mlp(
-                temb if temb is not None
-                else torch.zeros(b, cfg.resampler_dim, device=h.device))
-            for blk in self.semantic_resampler.blocks:
-                h = blk(h, t)
-            # DiT cond 차원(1024, 추정)으로 복귀 — 미확인
-            h = self.resampler_to_cond(h)
+            anchored = self.quality_anchor(queries, te35_hidden)  # (B,32,1024)
+            t = (temb if temb is not None
+                 else torch.zeros(b, RD, device=dev))
+            h = self.semantic_resampler(te35_hidden, t)  # (B,64,1024)
             for i, attn in enumerate(self.v2_attentions):
                 h = h + attn(
-                    h, anchored,
-                    q_scale=self.v2_query_norms[i].weight.mean(),
-                    s_scale=self.v2_semantic_norms[i].weight.mean(),
+                    h * self.v2_query_norms[i].weight,
+                    anchored * self.v2_semantic_norms[i].weight,
                 )
-            return h  # (B, 32, 1024) — DiT cond 시퀀스 (차원 추정)
+            return h  # (B, 64, 1024) — DiT cond 시퀀스
 
     return ConnectorV2()
 
@@ -1020,7 +1169,7 @@ class Anima38Pipeline:
             h35 = _encode(self._tok35, self._te35, prompt)
             h06 = _encode(self._tok06, self._te06, prompt)
             # llm_adapter는 0.6B 경로에 적용 (위치 추정 — 미확인)
-            for blk in self._dit.llm_adapter:
+            for blk in self._dit.llm_adapter.blocks:
                 h06 = blk(h06)
             cond = self._dit.anima_v2_connector(h35)
             neg_cond = None
@@ -1120,12 +1269,13 @@ class Anima38Pipeline:
         return self._save(images, seed, "anima38-txt2img", meta)
 
     def _unpatchify(self, tokens, lat_h: int, lat_w: int):
-        """토큰 시퀀스 → latent 이미지 (x_embedder 역연산, 구조 추정)."""
-        import torch
-        cfg = self._config
-        p = cfg.patch_size
+        """토큰 시퀀스 → latent 이미지.
+
+        실측: final linear 출력 64-dim = 16ch × 2×2 패치.
+        """
+        p = self._config.patch_size
         b, t, _ = tokens.shape
-        ch = cfg.in_channels
+        ch = 16
         x = tokens.view(b, lat_h // p, lat_w // p, p, p, ch)
         x = x.permute(0, 5, 1, 3, 2, 4).reshape(b, ch, lat_h, lat_w)
         return x

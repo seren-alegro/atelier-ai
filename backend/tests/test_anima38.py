@@ -43,9 +43,9 @@ def test_import_without_torch():
 def _tiny_cfg():
     return a38.AnimaDiTConfig(
         num_layers=2, hidden_size=64, mlp_dim=128,
-        qkv_rank=8, qkv_up_dim=192, num_heads=6, head_dim=32,
+        num_heads=2, head_dim=32,
         cond_dim=32, patch_size=2, in_channels=4,
-        connector_dim=32, resampler_dim=48, resampler_mlp_dim=72,
+        connector_dim=64, resampler_dim=128, resampler_mlp_dim=72,
         te35_hidden=80, te06_hidden=32,
     )
 
@@ -68,19 +68,23 @@ def test_connector_forward_tiny():
     torch = pytest.importorskip("torch")
     conn = a38.build_connector_v2(_tiny_cfg())
     out = conn(torch.randn(2, 10, 80))
-    assert out.shape == (2, 32, 32)  # (B, 쿼리수, connector_dim)
+    assert out.shape == (2, 64, 64)  # (B, 리샘플러 쿼리 64, connector_dim)
 
 
 # -- 덤프 실측 키 매핑 ----------------------------------------------------------
 
 # 덤프 sample_keys에서 가져온 실제 키 이름 (tiny shape로 축소)
 REAL_CONNECTOR_KEYS = {
+    # 키 이름 매핑용 (shape은 _tiny_cfg 차원에 맞춤: D=64, T35=80)
     "net.anima_v2_connector.quality_anchor.layer_mix_logits": (6, 4),
     "net.anima_v2_connector.quality_anchor.query_norms.0.weight": (64,),
     "net.anima_v2_connector.quality_anchor.query_norms.5.weight": (64,),
+    "net.anima_v2_connector.quality_anchor.source_norms.0.weight": (80,),
     "net.anima_v2_connector.quality_anchor.semantic_attentions.0.k_norm.weight": (64,),
-    "net.anima_v2_connector.quality_anchor.semantic_attentions.0.k_proj.weight": (32, 80),
-    "net.anima_v2_connector.quality_anchor.semantic_attentions.0.o_proj.weight": (32, 32),
+    "net.anima_v2_connector.quality_anchor.semantic_attentions.0.q_proj.weight": (64, 64),
+    "net.anima_v2_connector.quality_anchor.semantic_attentions.0.k_proj.weight": (64, 80),
+    "net.anima_v2_connector.quality_anchor.semantic_attentions.0.v_proj.weight": (64, 80),
+    "net.anima_v2_connector.quality_anchor.semantic_attentions.0.o_proj.weight": (64, 64),
 }
 
 
@@ -127,9 +131,11 @@ def test_dit_block_key_roundtrip(tmp_path):
     dit = a38.build_anima_dit(_tiny_cfg())
     sd = dit.state_dict()
     subset = {k: v for k, v in sd.items() if k.startswith("blocks.0.")}
-    assert "blocks.0.attn.q_down.weight" in subset  # factorized QKV (덤프 shape 실측)
-    assert "blocks.0.attn.q_up.weight" in subset
-    assert "blocks.0.mlp_fc1.weight" in subset
+    assert "blocks.0.self_attn.q_proj.weight" in subset  # 실측 [2048,2048]
+    assert "blocks.0.self_attn.output_proj.weight" in subset
+    assert "blocks.0.cross_attn.k_proj.weight" in subset
+    assert "blocks.0.mlp.layer1.weight" in subset
+    assert "blocks.0.adaln_modulation_self_attn.1.weight" in subset
     p = tmp_path / "dit.safetensors"
     save_file(subset, str(p))
     dit2 = a38.build_anima_dit(_tiny_cfg())
