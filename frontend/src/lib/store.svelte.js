@@ -2,6 +2,28 @@
 import { fetchSettingsMeta } from './api.js';
 import { FALLBACK_SETTINGS } from './fallbackSettings.js';
 
+/** Civitai API 키 localStorage 보관 키 (민감값: 설정 메타와 분리 보관) */
+export const CIVITAI_KEY_STORAGE = 'atelier.civitai_api_key';
+
+/** 저장된 Civitai API 키 읽기 (없으면 '') */
+export function loadSavedApiKey() {
+  try {
+    return localStorage.getItem(CIVITAI_KEY_STORAGE) || '';
+  } catch {
+    return '';
+  }
+}
+
+/** Civitai API 키 저장 (비우면 삭제) */
+export function saveApiKey(key) {
+  try {
+    if (key) localStorage.setItem(CIVITAI_KEY_STORAGE, key);
+    else localStorage.removeItem(CIVITAI_KEY_STORAGE);
+  } catch {
+    /* 저장소 접근 실패 시 무시 */
+  }
+}
+
 /** 설정 목록으로부터 기본값 딕셔너리 생성 */
 function defaultsFrom(list) {
   const values = {};
@@ -50,6 +72,9 @@ export async function initStore() {
       }
     }
     store.values = fresh;
+    // 저장된 Civitai API 키 복원 (localStorage에만 보관)
+    const savedKey = loadSavedApiKey();
+    if (savedKey) store.values.civitai_api_key = savedKey;
   }
   store.loaded = true;
 }

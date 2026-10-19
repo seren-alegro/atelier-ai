@@ -294,9 +294,11 @@ def start_download(req: DownloadRequest):
         dest_dir = models_dir()
 
     job_id = _new_job(filename)
+    # API 키는 Civitai 다운로드에만 사용 — 다른 호스트로 키 유출 방지
+    worker_key = req.civitai_api_key if source == "civitai" else None
     thread = threading.Thread(
         target=_download_worker,
-        args=(job_id, url, dest_dir, filename, req.civitai_api_key),
+        args=(job_id, url, dest_dir, filename, worker_key),
         daemon=True,
     )
     thread.start()

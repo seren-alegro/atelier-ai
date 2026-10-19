@@ -337,3 +337,54 @@ def test_civitai_api_key_forwarded_to_resolve(client, monkeypatch):
     )
     assert r.status_code == 202
     assert seen.get("api_key") == "secret123"
+
+
+def test_non_civitai_download_gets_no_key(client, monkeypatch, file_server):
+    """Civitai가 아닌 URL에는 API 키를 전달하지 않는다 (유출 방지)."""
+    done = threading.Event()
+    seen = {}
+
+    def fake_worker(job_id, url, dest_dir, filename, api_key=None):
+        seen["api_key"] = api_key
+        done.set()
+
+    monkeypatch.setattr(downloads, "_download_worker", fake_worker)
+    r = client.post(
+        "/api/downloads",
+        json={
+            "url": f"{file_server}/m.safetensors",
+            "kind": "checkpoint",
+            "civitai_api_key": "secret123",
+        },
+    )
+    assert r.status_code == 202
+    assert done.wait(timeout=5)
+    assert seen.get("api_key") is None
+
+
+def test_civitai_download_gets_key(client, monkeypatch):
+    """Civitai URL에는 API 키가 워커까지 전달된다."""
+    done = threading.Event()
+    seen = {}
+
+    def fake_worker(job_id, url, dest_dir, filename, api_key=None):
+        seen["api_key"] = api_key
+        done.set()
+
+    monkeypatch.setattr(downloads, "_download_worker", fake_worker)
+    monkeypatch.setattr(
+        downloads, "civitai_resolve", lambda mid, vid, api_key=None: (
+            "https://127.0.0.1:9/dl.safetensors", "LORA",
+        )
+    )
+    r = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://civitai.com/models/1/x",
+            "kind": "auto",
+            "civitai_api_key": "secret123",
+        },
+    )
+    assert r.status_code == 202
+    assert done.wait(timeout=5)
+    assert seen.get("api_key") == "secret123"

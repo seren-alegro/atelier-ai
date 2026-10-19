@@ -1,9 +1,14 @@
 <script>
-  import { store, resetAll } from './store.svelte.js';
+  import { store, resetAll, saveApiKey } from './store.svelte.js';
   import SettingField from './SettingField.svelte';
   import TagInput from './TagInput.svelte';
   import UpdatePanel from './UpdatePanel.svelte';
   import { t, getLang, setLang, LANGS, metaLabel, metaDesc } from './i18n.svelte.js';
+
+  // Civitai API 키가 바뀌면 localStorage에 보관 (새로고침해도 유지)
+  $effect(() => {
+    saveApiKey(store.values.civitai_api_key || '');
+  });
 
   // 프롬프트 계열은 칩 입력 UI 사용
   const TEXT_AS_TAGS = new Set(['prompt', 'negative_prompt']);
