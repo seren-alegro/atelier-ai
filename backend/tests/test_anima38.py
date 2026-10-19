@@ -247,6 +247,25 @@ def _make_pack(base: str, name: str = "anima38pack1", partial: bool = False):
     return pack
 
 
+def test_scan_finds_pack_civitai_filename(tmp_path, monkeypatch):
+    """Civitai 공식 파일명(anima38B_11.safetensors)도 DiT로 인식."""
+    models_dir = str(tmp_path / "models")
+    os.makedirs(models_dir, exist_ok=True)
+    pack = os.path.join(models_dir, "anima38pack2")
+    os.makedirs(pack, exist_ok=True)
+    for f in ("anima38B_11.safetensors", "qwen35_4b.safetensors",
+              "qwen_3_06b_base.safetensors"):
+        with open(os.path.join(pack, f), "wb") as fh:
+            fh.write(b"x" * 64)
+    monkeypatch.setenv("ATELIER_MODELS_DIR", models_dir)
+
+    assert models.is_anima38_pack_dir(pack) is True
+    items = models._scan()
+    packs = [m for m in items if m["kind"] == "anima38pack"]
+    assert len(packs) == 1
+    assert packs[0]["pack_status"]["dit"] == "anima38b_11.safetensors"
+
+
 def test_scan_finds_pack(tmp_path, monkeypatch):
     models_dir = str(tmp_path / "models")
     os.makedirs(models_dir, exist_ok=True)

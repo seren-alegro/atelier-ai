@@ -138,29 +138,40 @@ def looks_like_pack_dir(dir_path: str) -> bool:
             or "3.8" in name or "anima38" in name)
 
 
+def _is_dit_filename(name: str) -> bool:
+    """DiT 본체 파일명 판정.
+
+    Civitai 공식 파일(anima38B_11.safetensors)은 '3.8'이 아닌 '38b'
+    형태이므로 둘 다 인정한다. 어댑터·2.9b 파일은 제외.
+    """
+    n = name.lower()
+    if not n.endswith(".safetensors"):
+        return False
+    if "adapter" in n:
+        return False
+    if "2.9" in n or "29b" in n:
+        return False
+    return "3.8" in n or "38b" in n
+
+
 def is_anima38_pack_dir(dir_path: str) -> bool:
     """3.8b 팩 디렉토리인지 판정.
 
-    조건: qwen35_4b.safetensors 존재 + 파일명에 '3.8'을 포함한 .safetensors 존재.
+    조건: qwen35_4b.safetensors 존재 + DiT 본체 파일 존재.
     (대소문자 무시)
     """
     if not os.path.isdir(dir_path):
         return False
     files, _ = _names_lower(dir_path)
     has_te35 = "qwen35_4b.safetensors" in files
-    has_dit = any(
-        f.endswith(".safetensors") and "3.8" in f and "adapter" not in f
-        for f in files
-    )
+    has_dit = any(_is_dit_filename(f) for f in files)
     return has_te35 and has_dit
 
 
 def pack_status(dir_path: str) -> dict:
     """팩 구성 요소별 존재 여부. 파일이 없어도 목록 표시는 되게 한다."""
     files, dirs = _names_lower(dir_path)
-    dit = sorted(f for f in files
-                 if f.endswith(".safetensors") and "3.8" in f
-                 and "adapter" not in f)
+    dit = sorted(f for f in files if _is_dit_filename(f))
     adapter = sorted(f for f in files
                      if f.endswith(".safetensors") and "adapter" in f)
     tok_dirs = sorted(d for d in dirs if "tokenizer" in d)

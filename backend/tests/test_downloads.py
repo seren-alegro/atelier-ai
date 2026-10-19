@@ -91,6 +91,13 @@ def test_classify_civitai_version():
     assert info["version_id"] == "67890"
 
 
+def test_classify_civitai_red_mirror():
+    """civitai.red 미러도 공식 API로 조회 (ID 체계 동일)."""
+    src, info = classify_url("https://civitai.red/models/2880480/anima-38b")
+    assert src == "civitai"
+    assert info == {"model_id": "2880480", "version_id": None}
+
+
 def test_classify_civitai_not_model_page():
     with pytest.raises(Exception):
         classify_url("https://civitai.com/images/999")

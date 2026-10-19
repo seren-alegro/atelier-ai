@@ -80,7 +80,9 @@ def classify_url(url: str) -> tuple[str, dict]:
             status_code=400, detail="http/https URL만 받을 수 있어요."
         )
     host = p.hostname.lower()
-    if "civitai.com" in host:
+    # civitai.red는 Civitai 미러 — 모델 ID 체계가 동일하므로 공식 API로 조회
+    if "civitai.com" in host or host == "civitai.red" \
+            or host.endswith(".civitai.red"):
         m = re.search(r"/models/(\d+)", p.path)
         if not m:
             raise HTTPException(
