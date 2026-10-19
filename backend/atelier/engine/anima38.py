@@ -929,16 +929,18 @@ def load_qwen35_te(path: str, dtype: str = "bfloat16",
     """Qwen3.5 4B TE 로드 (FP8 처리 포함).
 
     1차: transformers Qwen3_5TextModel.from_pretrained 직접 시도.
-    실패 시 폴백: FP8 → bf16 dequantize 후 빈 모델에 load_state_dict.
-    덤프 실측: 키에 `model.` prefix가 없으므로 필요시 추가한다.
+    실패 시 폴백: Qwen3_5TextConfig를 실측값으로 직접 생성 후
+    FP8 → bf16 dequantize한 state_dict를 로드.
+    (Qwen3_5Config는 vision+text 합성 config라 TextModel에 사용 불가)
 
-    _model_cls/_config_cls: 테스트용 의존성 주입 (기본값은 transformers).
+    _model_cls/_config_cls: 테스트용 의존성 주입.
     """
     import torch
     import transformers
+    from safetensors.torch import load_file
 
     model_cls = _model_cls or transformers.Qwen3_5TextModel
-    config_cls = _config_cls or transformers.Qwen3_5Config
+    config_cls = _config_cls or transformers.Qwen3_5TextConfig
     tdtype = getattr(torch, dtype)
     try:
         model = model_cls.from_pretrained(
@@ -949,14 +951,26 @@ def load_qwen35_te(path: str, dtype: str = "bfloat16",
     except Exception as e:  # noqa: BLE001 — FP8 등 비표준 형식이면 폴백
         first_error = e
 
-    # 폴백: config는 파일에서 읽고(없으면 기본), 가중치는 dequantize
+    # 폴백: Qwen3.5-4B text_config 실측값 (HF Qwen/Qwen3.5-4B config.json)
     try:
-        config = config_cls.from_pretrained(path, trust_remote_code=False)
-    except Exception:  # noqa: BLE001
-        config = config_cls()
+        config = config_cls(
+            vocab_size=248320, hidden_size=2560, intermediate_size=9216,
+            num_hidden_layers=32, num_attention_heads=16,
+            num_key_value_heads=4, head_dim=256,
+            linear_conv_kernel_dim=4, linear_key_head_dim=128,
+            linear_num_key_heads=16, linear_value_head_dim=128,
+            linear_num_value_heads=32, full_attention_interval=4,
+            tie_word_embeddings=True, max_position_embeddings=262144,
+            rms_norm_eps=1e-6, hidden_act="silu", attention_bias=False,
+        )
+    except Exception:  # noqa: BLE001 — 테스트용 FakeConfig 등
+        try:
+            config = config_cls.from_pretrained(path, trust_remote_code=False)
+        except Exception:  # noqa: BLE001
+            config = config_cls()
     model = model_cls(config)
     state = dequantize_fp8_state_dict(path, dtype)
-    # `model.` prefix 보정 (덤프: prefix 없음)
+    # `model.` prefix 보정 (덤프: prefix 없음, Qwen3_5TextModel은 prefix 있음)
     if not any(k.startswith("model.") for k in state):
         state = {"model." + k: v for k, v in state.items()}
     missing, unexpected = model.load_state_dict(state, strict=False)
