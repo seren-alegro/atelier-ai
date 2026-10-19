@@ -1543,6 +1543,7 @@ class Anima2BPipeline:
         # Anima38Pipeline의 것을 재사용
         tmp = Anima38Pipeline.__new__(Anima38Pipeline)
         tmp._config = self._config
+        tmp.device = self.device
         return Anima38Pipeline._common_kwargs(tmp, params)
 
     def txt2img(self, params: dict, loras: dict | None = None) -> list[str]:
