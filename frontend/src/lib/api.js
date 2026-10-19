@@ -688,9 +688,10 @@ export async function fetchSamplers() {
 }
 
 /** POST /api/downloads — URL 다운로드 시작. {job_id} 반환. */
-export async function startDownload(url, kind = 'auto', packDir = null) {
+export async function startDownload(url, kind = 'auto', packDir = null, apiKey = '') {
   const body = { url, kind };
   if (packDir) body.pack_dir = packDir;
+  if (apiKey) body.civitai_api_key = apiKey;
   let res;
   try {
     res = await fetch(API_BASE + '/api/downloads', {

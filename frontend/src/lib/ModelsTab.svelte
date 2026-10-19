@@ -54,7 +54,9 @@
     url = (url ?? '').trim();
     if (!url) return;
     try {
-      const { job_id } = await startDownload(url, kind, packDir);
+      const { job_id } = await startDownload(
+        url, kind, packDir, store.values.civitai_api_key || ''
+      );
       dlJob = {
         id: job_id,
         status: 'downloading',

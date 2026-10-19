@@ -99,3 +99,18 @@ def test_api_settings_includes_language_fields():
     by_key = {e["key"]: e for e in body}
     assert by_key["steps"]["label_en"] == "Steps"
     assert by_key["steps"]["label_ja"] == "ステップ数"
+
+
+def test_civitai_api_key_setting_exists():
+    s = get_setting("civitai_api_key")
+    assert s is not None
+    assert s.kind == "password"
+    assert s.recommended == ""
+    assert s.label and s.label_en and s.label_ja
+    assert s.description and s.description_en and s.description_ja
+
+
+def test_validate_password_kind():
+    assert validate({"civitai_api_key": "abc123"}) == {}
+    errs = validate({"civitai_api_key": 123})
+    assert "civitai_api_key" in errs

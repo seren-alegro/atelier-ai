@@ -127,6 +127,14 @@ export function getFallbackSettings() {
       kind: 'number',
       min: 0.0, max: 1.0, options: [], unit: '',
     },
+    {
+      key: 'civitai_api_key',
+      labelKey: 'setting.civitaiKey',
+      descKey: 'setting.civitaiKeyDesc',
+      recommended: '',
+      kind: 'password',
+      min: null, max: null, options: [], unit: '',
+    },
   ];
 }
 

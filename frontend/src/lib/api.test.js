@@ -395,6 +395,22 @@ describe('startDownload / fetchDownloadStatus', () => {
     expect(body.pack_dir).toBe('anima38');
   });
 
+  it('apiKey가 있으면 civitai_api_key를 함께 보낸다', async () => {
+    mockFetchOnce(202, { job_id: 'dl10' });
+    const { startDownload } = await import('./api.js');
+    await startDownload('https://civitai.com/models/1', 'auto', null, 'key123');
+    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(body.civitai_api_key).toBe('key123');
+  });
+
+  it('apiKey가 비어 있으면 civitai_api_key를 보내지 않는다', async () => {
+    mockFetchOnce(202, { job_id: 'dl11' });
+    const { startDownload } = await import('./api.js');
+    await startDownload('https://civitai.com/models/1', 'auto', null, '');
+    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect('civitai_api_key' in body).toBe(false);
+  });
+
   it('실패하면 detail 메시지를 던진다', async () => {
     mockFetchOnce(400, { detail: '나쁜 URL' });
     const { startDownload } = await import('./api.js');

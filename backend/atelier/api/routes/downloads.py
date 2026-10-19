@@ -103,13 +103,25 @@ def classify_url(url: str) -> tuple[str, dict]:
     return "direct", {"direct_url": url}
 
 
-def civitai_resolve(model_id: str, version_id: str | None) -> tuple[str, str]:
+def _auth_headers(api_key: str | None) -> dict[str, str]:
+    """Civitai API 키가 있으면 Bearer 헤더 생성. 없으면 빈 dict."""
+    key = (api_key or "").strip()
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
+def civitai_resolve(
+    model_id: str, version_id: str | None, api_key: str | None = None
+) -> tuple[str, str]:
     """Civitai API로 실제 다운로드 URL과 모델 타입 조회.
 
     → (download_url, model_type). version_id가 없으면 최신 버전.
     """
     try:
-        r = httpx.get(f"{CIVITAI_API}/models/{model_id}", timeout=30)
+        r = httpx.get(
+            f"{CIVITAI_API}/models/{model_id}",
+            headers=_auth_headers(api_key),
+            timeout=30,
+        )
         r.raise_for_status()
         data = r.json()
     except HTTPException:
@@ -169,7 +181,8 @@ def _filename_from_content_disposition(header: str) -> str | None:
 
 
 def _download_worker(
-    job_id: str, url: str, dest_dir: str, filename: str
+    job_id: str, url: str, dest_dir: str, filename: str,
+    api_key: str | None = None,
 ) -> None:
     """백그라운드 다운로드. .part에 쓰고 완료 후 rename."""
     part = os.path.join(dest_dir, filename + ".part")
@@ -177,7 +190,8 @@ def _download_worker(
     try:
         os.makedirs(dest_dir, exist_ok=True)
         with httpx.stream(
-            "GET", url, timeout=60, follow_redirects=True
+            "GET", url, headers=_auth_headers(api_key),
+            timeout=60, follow_redirects=True,
         ) as r:
             r.raise_for_status()
             # Content-Disposition에 더 정확한 파일명이 있으면 교체
@@ -221,6 +235,7 @@ class DownloadRequest(BaseModel):
     url: str
     kind: str = "auto"  # auto | checkpoint | lora | pack
     pack_dir: str | None = None  # kind=pack일 때 기존 팩 디렉토리명
+    civitai_api_key: str | None = None  # Civitai 다운로드용 본인 API 키
 
 
 @router.post("/api/downloads", status_code=202)
@@ -241,7 +256,8 @@ def start_download(req: DownloadRequest):
 
     if source == "civitai":
         dl_url, model_type = civitai_resolve(
-            info["model_id"], info["version_id"]
+            info["model_id"], info["version_id"],
+            api_key=req.civitai_api_key,
         )
         if kind == "auto":
             mapped = CIVITAI_TYPE_MAP.get(model_type)
@@ -280,7 +296,7 @@ def start_download(req: DownloadRequest):
     job_id = _new_job(filename)
     thread = threading.Thread(
         target=_download_worker,
-        args=(job_id, url, dest_dir, filename),
+        args=(job_id, url, dest_dir, filename, req.civitai_api_key),
         daemon=True,
     )
     thread.start()

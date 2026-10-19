@@ -537,6 +537,8 @@ ko: {
 'setting.cnModelDesc': '포즈 지정에 쓸 ControlNet 모델이에요. models/controlnet/ 폴더에 .safetensors 파일을 넣으면 목록에서 고를 수 있고, HuggingFace repo id를 직접 적어도 돼요. 비워두면 기본값(xinsir/controlnet-openpose-sdxl-1.0)을 받아와요.',
 'setting.cnStrength': 'ControlNet 강도',
 'setting.cnStrengthDesc': '포즈를 얼마나 따를지 정해요. 높을수록 포즈맵을 빡빡하게 따르고, 낮을수록 포즈에서 자유로워져요.',
+'setting.civitaiKey': 'Civitai API 키',
+'setting.civitaiKeyDesc': 'Civitai에서 모델을 받을 때 쓰는 본인 API 키예요. Civitai 설정 → API Keys에서 발급받아 붙여넣으세요. 키는 브라우저에만 저장되고 Civitai 다운로드 인증에만 쓰여요.',
 
 // ---- API 에러 ----
 'api.connectFail': '백엔드에 연결할 수 없어요. 백엔드가 켜져 있는지 확인해주세요.',
@@ -1032,6 +1034,8 @@ en: {
 'setting.cnModelDesc': 'The ControlNet model for pose control. Put .safetensors files in models/controlnet/ to pick from the list, or type a HuggingFace repo id directly. Empty uses the default (xinsir/controlnet-openpose-sdxl-1.0).',
 'setting.cnStrength': 'ControlNet strength',
 'setting.cnStrengthDesc': 'How closely to follow the pose. Higher follows the posemap strictly; lower is freer.',
+'setting.civitaiKey': 'Civitai API key',
+'setting.civitaiKeyDesc': 'Your own API key for downloading models from Civitai. Get one from Civitai Settings → API Keys and paste it here. The key is stored only in your browser and used solely to authenticate Civitai downloads.',
 
 // ---- api errors ----
 'api.connectFail': "Can't connect to the backend. Please make sure the backend is running.",
@@ -1527,6 +1531,8 @@ ja: {
 'setting.cnModelDesc': 'ポーズ指定に使うControlNetモデルです。models/controlnet/フォルダに.safetensorsを入れるとリストから選べ、HuggingFaceのrepo idを直接書いてもOK。空ならデフォルト（xinsir/controlnet-openpose-sdxl-1.0）を使います。',
 'setting.cnStrength': 'ControlNet強度',
 'setting.cnStrengthDesc': 'ポーズにどれだけ従うか。高いほどポーズマップに厳密に従い、低いほど自由になります。',
+'setting.civitaiKey': 'Civitai APIキー',
+'setting.civitaiKeyDesc': 'Civitaiからモデルをダウンロードする際に使うご自身のAPIキーです。Civitaiの設定 → API Keysで発行して貼り付けてください。キーはブラウザにのみ保存され、Civitaiダウンロードの認証にのみ使用されます。',
 
 // ---- api errors ----
 'api.connectFail': 'バックエンドに接続できません。バックエンドが起動しているか確認してください。',

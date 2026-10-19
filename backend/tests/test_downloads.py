@@ -254,7 +254,7 @@ def test_download_status_404(client):
 def test_civitai_kind_auto_maps_type(client, monkeypatch):
     """Civitai LORA 타입 → kind auto가 lora로 판별되어 202를 반환."""
     monkeypatch.setattr(
-        downloads, "civitai_resolve", lambda mid, vid: (
+        downloads, "civitai_resolve", lambda mid, vid, api_key=None: (
             "https://127.0.0.1:9/dl.safetensors", "LORA",
         )
     )
@@ -269,7 +269,7 @@ def test_civitai_kind_auto_maps_type(client, monkeypatch):
 
 def test_civitai_unsupported_type(client, monkeypatch, file_server):
     monkeypatch.setattr(
-        downloads, "civitai_resolve", lambda mid, vid: (
+        downloads, "civitai_resolve", lambda mid, vid, api_key=None: (
             f"{file_server}/m.safetensors", "TextualInversion",
         )
     )
@@ -297,3 +297,43 @@ def test_pack_missing(client, tmp_path):
 
 def test_pack_missing_404(client):
     assert client.get("/api/pack-missing/nonexistent").status_code == 404
+
+
+def test_auth_headers():
+    from atelier.api.routes.downloads import _auth_headers
+    assert _auth_headers(None) == {}
+    assert _auth_headers("") == {}
+    assert _auth_headers("  ") == {}
+    h = _auth_headers("mykey123")
+    assert h == {"Authorization": "Bearer mykey123"}
+
+
+def test_download_request_accepts_api_key():
+    from atelier.api.routes.downloads import DownloadRequest
+    req = DownloadRequest(url="https://example.com/a.safetensors")
+    assert req.civitai_api_key is None
+    req2 = DownloadRequest(
+        url="https://example.com/a.safetensors", civitai_api_key="k"
+    )
+    assert req2.civitai_api_key == "k"
+
+
+def test_civitai_api_key_forwarded_to_resolve(client, monkeypatch):
+    """POST의 civitai_api_key가 civitai_resolve에 전달되는지 확인."""
+    seen = {}
+
+    def fake_resolve(mid, vid, api_key=None):
+        seen["api_key"] = api_key
+        return ("https://127.0.0.1:9/dl.safetensors", "LORA")
+
+    monkeypatch.setattr(downloads, "civitai_resolve", fake_resolve)
+    r = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://civitai.com/models/1/x",
+            "kind": "auto",
+            "civitai_api_key": "secret123",
+        },
+    )
+    assert r.status_code == 202
+    assert seen.get("api_key") == "secret123"

@@ -70,6 +70,9 @@
       <span>{value ? t('common.on') : t('common.off')}</span>
     </label>
     <p class="recommended">{t('common.recommended')} {setting.recommended ? t('common.on') : t('common.off')}</p>
+  {:else if setting.kind === 'password'}
+    <!-- kind === 'password': API 키 같은 비밀값은 한 줄 비밀번호 입력 -->
+    <input type="password" bind:value class="text-input" autocomplete="off" spellcheck="false" />
   {:else}
     <!-- kind === 'text': 일반 텍스트는 textarea (프롬프트 계열은 TagInput 사용) -->
     <textarea bind:value rows="3" class="textarea"></textarea>

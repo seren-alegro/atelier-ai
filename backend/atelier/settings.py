@@ -15,7 +15,7 @@ class Setting:
     label: str            # UI 표시 이름 (한국어)
     description: str      # 초보자용 한국어 설명
     recommended: object   # 추천값 (Anima 기준)
-    kind: str = "number"  # number | choice | text | toggle
+    kind: str = "number"  # number | choice | text | toggle | password
     min: float | None = None
     max: float | None = None
     options: list[str] = field(default_factory=list)
@@ -263,6 +263,25 @@ SETTINGS: list[Setting] = [
         description_ja="ポーズにどれだけ従うかを決めます。高くなるほどポーズマップに"
                        "厳密に従い、低くなるほど自由になります。",
     ),
+    Setting(
+        key="civitai_api_key",
+        label="Civitai API 키",
+        description="Civitai에서 모델을 받을 때 쓰는 본인 API 키예요. "
+                    "Civitai 설정 → API Keys에서 발급받아 붙여넣으세요. "
+                    "키는 브라우저에만 저장되고 Civitai 다운로드 인증에만 쓰여요.",
+        recommended="",
+        kind="password",
+        label_en="Civitai API key",
+        description_en="Your own API key for downloading models from Civitai. "
+                       "Get one from Civitai Settings → API Keys and paste it here. "
+                       "The key is stored only in your browser and used solely "
+                       "to authenticate Civitai downloads.",
+        label_ja="Civitai APIキー",
+        description_ja="Civitaiからモデルをダウンロードする際に使うご自身のAPIキーです。"
+                       "Civitaiの設定 → API Keysで発行して貼り付けてください。"
+                       "キーはブラウザにのみ保存され、Civitaiダウンロードの認証にのみ"
+                       "使用されます。",
+    ),
 ]
 
 
@@ -300,7 +319,7 @@ def validate(params: dict) -> dict[str, str]:
         elif s.kind == "choice":
             if value not in s.options:
                 errors[key] = f"'{s.label}'은(는) 다음 중 하나여야 해요: {', '.join(s.options)}"
-        elif s.kind == "text":
+        elif s.kind == "text" or s.kind == "password":
             if not isinstance(value, str):
                 errors[key] = f"'{s.label}'은(는) 문자열이어야 해요."
         elif s.kind == "toggle":
