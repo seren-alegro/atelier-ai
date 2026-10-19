@@ -172,6 +172,24 @@ def _is_dit_filename(name: str) -> bool:
     return "3.8" in n or "38b" in n
 
 
+def is_anima_dit_file(path: str) -> bool:
+    """단일 파일 Anima DiT 체크포인트인지 (2b/2.9b/3.8b).
+
+    `net.blocks.N.` 키가 있으면 Anima DiT로 판정.
+    """
+    if not os.path.isfile(path):
+        return False
+    try:
+        from safetensors import safe_open
+        with safe_open(path, framework="pt") as f:
+            for k in f.keys():
+                if k.startswith("net.blocks."):
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 def is_anima38_pack_dir(dir_path: str) -> bool:
     """3.8b 팩 디렉토리인지 판정.
 
@@ -1353,6 +1371,280 @@ class Anima38Pipeline:
 
     def pose(self, *a, **k):
         raise RuntimeError("Anima 3.8b에서는 포즈 지정을 아직 지원하지 않아요.")
+
+
+class Anima2BPipeline:
+    """Anima 2b (base, 28블록) 전용 파이프라인.
+
+    단일 .safetensors 파일에서 DiT를 로드.
+    - DiT 28블록 (파일에서 감지)
+    - Qwen3 0.6B TE → llm_adapter → cond (v2 커넥터 없음)
+    - VAE (base와 공유)
+    """
+
+    def __init__(self, model_path: str, output_dir: str = "outputs",
+                 device: str | None = None, torch_dtype: str | None = None,
+                 vae_path: str | None = None, te_path: str | None = None):
+        self.model_path = model_path
+        self.output_dir = output_dir
+        self.device = device
+        self.torch_dtype = torch_dtype
+        self.vae_path = vae_path
+        self.te_path = te_path
+        self._dit = None
+        self._te06 = None
+        self._tok06 = None
+        self._vae = None
+        self._config = AnimaDiTConfig()
+
+    def load(self) -> "Anima2BPipeline":
+        """2b 전체를 로드한다."""
+        if self._dit is not None:
+            return self
+        import torch
+        from atelier.engine.pipeline import _default_device, _default_dtype
+        from atelier.api.routes import models as models_module
+
+        device = self.device or _default_device()
+        dtype_name = self.torch_dtype or _default_dtype(device)
+        dtype = getattr(torch, dtype_name)
+
+        # DiT 레이어 수 감지
+        num_layers = self._detect_layers(self.model_path)
+        self._config.num_layers = num_layers
+
+        # 1) DiT
+        dit = build_anima_dit(self._config)
+        dit_state = load_safetensors_mapped(self.model_path,
+                                            prefix_strip=DIT_PREFIX)
+        report = apply_state_dict(dit, dit_state, prefix=DIT_PREFIX)
+        # v2 커넥터가 없으면 missing에 많이 나옴 — 2b는 정상
+        dit.to(device=device, dtype=dtype)
+        dit.eval()
+        self._dit = dit
+
+        # 2) Qwen3 0.6B TE
+        te_path = self.te_path or self._find_te06()
+        if not te_path:
+            raise RuntimeError(
+                "Qwen3 0.6B TE를 찾을 수 없어요. "
+                "models/text_encoder/에 넣어주세요.")
+        self._te06 = load_qwen3_te(te_path, dtype_name)
+        self._te06.to(device=device, dtype=dtype)
+
+        # 3) 토크나이저 (Qwen3-0.6B)
+        self._tok06 = self._find_tokenizer()
+
+        # 4) VAE
+        vae_path = self.vae_path or models_module.get_selected_vae_path()
+        if not vae_path:
+            vae_path = self._find_vae()
+        if not vae_path:
+            raise RuntimeError("VAE를 찾을 수 없어요.")
+        self._vae = self._load_vae(vae_path, device, dtype)
+
+        self.device = device
+        self.torch_dtype = dtype_name
+        return self
+
+    def _detect_layers(self, path: str) -> int:
+        """safetensors 헤더에서 블록 수 감지."""
+        import re
+        from safetensors import safe_open
+        with safe_open(path, framework="pt") as f:
+            blocks = set()
+            for k in f.keys():
+                m = re.match(r"net\.blocks\.(\d+)\.", k)
+                if m:
+                    blocks.add(int(m.group(1)))
+        return len(blocks) or 28
+
+    def _find_te06(self) -> str | None:
+        """Qwen3 0.6B TE 찾기."""
+        import glob
+        from atelier.api.routes import models as models_module
+        # 선택된 TE 우선
+        sel = models_module.get_selected_text_encoder()
+        if sel:
+            p = models_module.get_selected_text_encoder_path()
+            if p and os.path.isfile(p):
+                return p
+        # models/text_encoders/ 또는 text_encoder/ 에서 찾기
+        models_dir = models_module.models_dir()
+        for d in ("text_encoders", "text_encoder"):
+            for pat in (f"{d}/qwen_3_06b*.safetensors",
+                        f"{d}/*06b*.safetensors"):
+                for p in glob.glob(os.path.join(models_dir, pat)):
+                    return p
+        return None
+
+    def _find_tokenizer(self):
+        """Qwen3-0.6B 토크나이저 찾기."""
+        from atelier.api.routes import models as models_module
+        models_dir = models_module.models_dir()
+        # 흔한 위치들
+        for p in [
+            os.path.join(models_dir, "qwen3_06b_tokenizer"),
+            os.path.join(models_dir, "text_encoder", "qwen3_06b_tokenizer"),
+            os.path.join(models_dir, "anima38pack", "qwen3_06b_tokenizer"),
+        ]:
+            if os.path.isdir(p):
+                return load_tokenizer(p)
+        # HF에서 다운로드
+        import transformers
+        return transformers.AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B")
+
+    def _find_vae(self) -> str | None:
+        import glob
+        from atelier.api.routes import models as models_module
+        models_dir = models_module.models_dir()
+        for p in glob.glob(os.path.join(models_dir, "vae", "*.safetensors")):
+            return p
+        return None
+
+    def _load_vae(self, vae_path: str, device, dtype):
+        import torch
+        from diffusers import AutoencoderKL
+        vae = AutoencoderKL.from_single_file(
+            vae_path, torch_dtype=dtype, trust_remote_code=False)
+        vae.to(device=device, dtype=dtype)
+        vae.eval()
+        return vae
+
+    def encode_prompt(self, prompt: str, negative_prompt: str = ""):
+        """Qwen3 0.6B → llm_adapter → cond (1024-dim)."""
+        import torch
+
+        def _encode(text):
+            ids = self._tok06(text, return_tensors="pt", padding=True,
+                              truncation=True, max_length=512)
+            ids = {k: v.to(self.device) for k, v in ids.items()}
+            with torch.no_grad():
+                out = self._te06(**ids)
+            hidden = (out.last_hidden_state
+                      if hasattr(out, "last_hidden_state") else out[0])
+            # llm_adapter 블록으로 정제
+            for blk in self._dit.llm_adapter.blocks:
+                hidden = blk(hidden)
+            return hidden
+
+        with torch.no_grad():
+            cond = _encode(prompt)
+            neg_cond = _encode(negative_prompt) if negative_prompt else None
+        return cond, neg_cond
+
+    # -- 생성 (Anima38Pipeline.txt2img와 동일, 2b용) --
+
+    def _common_kwargs(self, params: dict):
+        # Anima38Pipeline의 것을 재사용
+        tmp = Anima38Pipeline.__new__(Anima38Pipeline)
+        tmp._config = self._config
+        return Anima38Pipeline._common_kwargs(tmp, params)
+
+    def txt2img(self, params: dict, loras: dict | None = None) -> list[str]:
+        import torch
+        from atelier.engine.samplers import build_scheduler
+        from atelier.settings import defaults as _defaults
+
+        if self._dit is None:
+            raise RuntimeError("파이프라인이 로드되지 않았어요.")
+        if loras:
+            print("[atelier] Anima 2b에서는 LoRA가 지원되지 않아 건너뜁니다.")
+
+        kwargs, seed = self._common_kwargs(params)
+        sampler_name = params.get("sampler", _defaults()["sampler"])
+        noise_schedule = params.get("scheduler", _defaults()["scheduler"])
+        from atelier.engine.samplers import _NoiseScheduleWrapper
+        scheduler = build_scheduler(sampler_name)
+        if noise_schedule not in (None, "auto", "normal"):
+            scheduler = _NoiseScheduleWrapper(scheduler, noise_schedule)
+        scheduler.set_timesteps(kwargs["num_inference_steps"])
+
+        cond, neg_cond = self.encode_prompt(kwargs["prompt"],
+                                            kwargs["negative_prompt"])
+        if neg_cond is not None and kwargs["guidance_scale"] > 1.0:
+            cond_in = torch.cat([neg_cond, cond], dim=0)
+        else:
+            cond_in = cond
+
+        h, w = kwargs["height"], kwargs["width"]
+        lat_h, lat_w = h // 8, w // 8
+        latents = torch.randn(
+            (kwargs["num_images_per_prompt"], self._config.in_channels,
+             lat_h, lat_w),
+            generator=kwargs["generator"], device=self.device,
+            dtype=getattr(torch, self.torch_dtype),
+        )
+        batch = latents.shape[0]
+        if cond_in.shape[0] == 1 and batch > 1:
+            cond_in = cond_in.expand(batch, -1, -1)
+
+        dit = self._dit
+        for t in scheduler.timesteps:
+            t_batch = t.expand(batch).to(self.device)
+            with torch.no_grad():
+                if neg_cond is not None and kwargs["guidance_scale"] > 1.0:
+                    lat_in = torch.cat([latents, latents], dim=0)
+                    h_pred, _ = dit(lat_in, t_batch, cond_in)
+                    noise_pred = self._unpatchify(h_pred, lat_h, lat_w)
+                    n_neg, n_pos = noise_pred.chunk(2, dim=0)
+                    noise_pred = (n_neg + kwargs["guidance_scale"]
+                                  * (n_pos - n_neg))
+                else:
+                    h_pred, _ = dit(latents, t_batch, cond_in)
+                    noise_pred = self._unpatchify(h_pred, lat_h, lat_w)
+            latents = scheduler.step(noise_pred, t, latents).prev_sample
+
+        images = self._decode(latents)
+        from atelier.pngmeta import build_meta_from_kwargs, build_pnginfo
+        meta = build_meta_from_kwargs(kwargs, seed, sampler_name)
+        return self._save(images, seed, "anima2b-txt2img", meta)
+
+    def _unpatchify(self, tokens, lat_h: int, lat_w: int):
+        p = self._config.patch_size
+        b, t, _ = tokens.shape
+        ch = 16
+        x = tokens.view(b, lat_h // p, lat_w // p, p, p, ch)
+        x = x.permute(0, 5, 1, 3, 2, 4).reshape(b, ch, lat_h, lat_w)
+        return x
+
+    def _decode(self, latents):
+        import torch
+        from PIL import Image
+        import numpy as np
+        vae = self._vae
+        scale = getattr(getattr(vae, "config", None), "scaling_factor", 0.18215)
+        with torch.no_grad():
+            imgs = vae.decode(latents / scale).sample
+        imgs = (imgs / 2 + 0.5).clamp(0, 1)
+        imgs = (imgs.cpu().permute(0, 2, 3, 1).float().numpy() * 255
+                ).round().astype(np.uint8)
+        return [Image.fromarray(imgs[i]) for i in range(imgs.shape[0])]
+
+    def _save(self, images, seed: int, tag: str, meta) -> list[str]:
+        import uuid
+        from datetime import datetime
+        from atelier.pngmeta import build_pnginfo
+        os.makedirs(self.output_dir, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        uniq = uuid.uuid4().hex[:6]
+        paths = []
+        for i, img in enumerate(images):
+            path = os.path.join(
+                self.output_dir, f"{stamp}-{tag}-s{seed}-{i}-{uniq}.png")
+            info = build_pnginfo(meta) if meta else None
+            img.save(path, pnginfo=info)
+            paths.append(path)
+        return paths
+
+    def img2img(self, *a, **k):
+        raise RuntimeError("Anima 2b에서는 img2img가 지원되지 않아요.")
+
+    def inpaint(self, *a, **k):
+        raise RuntimeError("Anima 2b에서는 inpaint가 지원되지 않아요.")
+
+    def pose(self, *a, **k):
+        raise RuntimeError("Anima 2b에서는 pose가 지원되지 않아요.")
 
 
 def extract_vae_from_checkpoint(ckpt_path: str, out_dir: str) -> str:

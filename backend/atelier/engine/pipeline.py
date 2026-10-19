@@ -91,16 +91,9 @@ class Pipeline:
         dtype_name = self.torch_dtype or _default_dtype(device)
         dtype = getattr(torch, dtype_name)
 
-        pipe_cls = AutoPipelineForText2Image
-        if os.path.isfile(self.model_path):
-            # 단일 .safetensors 파일 → from_single_file
-            pipe = pipe_cls.from_single_file(
-                self.model_path, torch_dtype=dtype, trust_remote_code=False,
-            )
-        else:
-            pipe = pipe_cls.from_pretrained(
-                self.model_path, torch_dtype=dtype, trust_remote_code=False,
-            )
+        pipe = AutoPipelineForText2Image.from_pretrained(
+            self.model_path, torch_dtype=dtype, trust_remote_code=False,
+        )
         pipe.to(device)
         self._pipe = pipe
         self.device = device

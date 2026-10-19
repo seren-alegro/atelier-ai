@@ -56,7 +56,13 @@ def configure(model_path: str, output_dir: str = "outputs") -> None:
         from atelier.engine.anima38 import Anima38Pipeline
         pipe = Anima38Pipeline(pack_dir=model_path, output_dir=output_dir)
     else:
-        pipe = Pipeline(model_path=model_path, output_dir=output_dir)
+        # Anima DiT 단일 파일 (2b 등)인지 확인
+        from atelier.engine import anima38 as a38
+        if a38.is_anima_dit_file(model_path):
+            pipe = a38.Anima2BPipeline(model_path=model_path,
+                                       output_dir=output_dir)
+        else:
+            pipe = Pipeline(model_path=model_path, output_dir=output_dir)
     _ensure_loaded(pipe)
     set_pipeline(pipe)
 

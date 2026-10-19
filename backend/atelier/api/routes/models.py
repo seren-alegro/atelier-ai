@@ -274,7 +274,13 @@ def set_active(req: ActiveRequest):
         new_pipe = Anima38Pipeline(pack_dir=path, output_dir=output_dir)
     else:
         path = _resolve(req.name)
-        new_pipe = Pipeline(model_path=path, output_dir=output_dir)
+        # Anima DiT 단일 파일 (2b 등)인지 확인
+        from atelier.engine import anima38 as a38
+        if a38.is_anima_dit_file(path):
+            new_pipe = a38.Anima2BPipeline(model_path=path,
+                                           output_dir=output_dir)
+        else:
+            new_pipe = Pipeline(model_path=path, output_dir=output_dir)
     try:
         new_pipe.load()
     except Exception as e:  # noqa: BLE001 - 메시지를 그대로 전달
