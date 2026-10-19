@@ -371,3 +371,23 @@ def test_unsupported_modes_raise():
         pipe.inpaint({})
     with pytest.raises(RuntimeError, match="아직 지원하지 않아요"):
         pipe.pose({})
+
+
+def test_fallback_te_path_prefers_selected(tmp_path, monkeypatch):
+    """선택된 TE 파일이 역할에 맞으면 우선, 없으면 패턴 매칭."""
+    te_dir = tmp_path / "models" / "text_encoders"
+    te_dir.mkdir(parents=True)
+    (te_dir / "qwen35_4b.safetensors").write_bytes(b"t")
+    (te_dir / "my-adapter.safetensors").write_bytes(b"a")
+    monkeypatch.setenv("ATELIER_MODELS_DIR", str(tmp_path / "models"))
+    monkeypatch.setenv("ATELIER_DATA_DIR", str(tmp_path / "data"))
+    models._save_text_encoder("text_encoders/my-adapter.safetensors")
+    assert a38._fallback_te_path("adapter").endswith("my-adapter.safetensors")
+    assert a38._fallback_te_path("qwen35_4b").endswith("qwen35_4b.safetensors")
+    assert a38._fallback_te_path("qwen3_06b") is None
+
+
+def test_fallback_te_path_no_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATELIER_MODELS_DIR", str(tmp_path / "models"))
+    monkeypatch.setenv("ATELIER_DATA_DIR", str(tmp_path / "data"))
+    assert a38._fallback_te_path("qwen35_4b") is None

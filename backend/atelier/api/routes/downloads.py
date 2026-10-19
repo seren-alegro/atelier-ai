@@ -31,7 +31,7 @@ from atelier.api.routes.models import _resolve_dir, models_dir
 router = APIRouter()
 
 ALLOWED_EXTS = (".safetensors", ".ckpt", ".pt")
-KINDS = ("auto", "checkpoint", "lora", "pack")
+KINDS = ("auto", "checkpoint", "lora", "vae", "text_encoder", "pack")
 
 CIVITAI_API = "https://civitai.com/api/v1"
 #: Civitai 모델 타입 → 내부 kind
@@ -40,6 +40,7 @@ CIVITAI_TYPE_MAP = {
     "LORA": "lora",
     "LoCon": "lora",
     "DoRA": "lora",
+    "VAE": "vae",
 }
 
 # job_id → {id, status, filename, downloaded_bytes, total_bytes, error}
@@ -235,7 +236,7 @@ def _download_worker(
 
 class DownloadRequest(BaseModel):
     url: str
-    kind: str = "auto"  # auto | checkpoint | lora | pack
+    kind: str = "auto"  # auto | checkpoint | lora | vae | text_encoder | pack
     pack_dir: str | None = None  # kind=pack일 때 기존 팩 디렉토리명
     civitai_api_key: str | None = None  # Civitai 다운로드용 본인 API 키
 
@@ -252,7 +253,7 @@ def start_download(req: DownloadRequest):
     if kind not in KINDS:
         raise HTTPException(
             status_code=400,
-            detail="kind는 auto/checkpoint/lora/pack 중 하나예요.",
+            detail="kind는 auto/checkpoint/lora/vae/text_encoder/pack 중 하나예요.",
         )
     source, info = classify_url(url)
 
@@ -281,7 +282,17 @@ def start_download(req: DownloadRequest):
         filename = "download.safetensors"
 
     if kind == "auto":
-        kind = "lora" if "lora" in filename.lower() else "checkpoint"
+        # 직접 URL(HF 등)은 파일명으로 kind 추정
+        fn = filename.lower()
+        if "lora" in fn:
+            kind = "lora"
+        elif "vae" in fn:
+            kind = "vae"
+        elif any(k in fn for k in
+                 ("qwen", "text_encoder", "text-encoder", "t5", "clip")):
+            kind = "text_encoder"
+        else:
+            kind = "checkpoint"
 
     if kind == "pack":
         if not req.pack_dir:
@@ -292,6 +303,10 @@ def start_download(req: DownloadRequest):
         dest_dir = _resolve_dir(req.pack_dir)  # 경로 검증 + 존재 확인
     elif kind == "lora":
         dest_dir = os.path.join(models_dir(), "lora")
+    elif kind == "vae":
+        dest_dir = os.path.join(models_dir(), "vae")
+    elif kind == "text_encoder":
+        dest_dir = os.path.join(models_dir(), "text_encoders")
     else:
         dest_dir = models_dir()
 

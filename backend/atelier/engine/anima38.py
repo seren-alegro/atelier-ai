@@ -198,6 +198,44 @@ def find_dit_file(dir_path: str) -> str | None:
     return None
 
 
+def _fallback_te_path(role: str) -> str | None:
+    """팩에 없는 TE/어댑터 파일을 models/text_encoders/에서 찾는다.
+
+    role: "qwen35_4b" | "qwen3_06b" | "adapter".
+    사용자가 선택한 파일(POST /api/models/text-encoder)이 역할에 맞으면
+    우선하고, 없으면 파일명 패턴으로 첫 후보를 쓴다.
+    """
+    try:
+        from atelier.api.routes import models as models_module
+        te_dir = os.path.join(models_module.models_dir(), "text_encoders")
+        selected = models_module.get_selected_text_encoder() or ""
+    except Exception:  # noqa: BLE001 - 폴백은 조용히 포기
+        return None
+    if not os.path.isdir(te_dir):
+        return None
+    cands = sorted(
+        f for f in os.listdir(te_dir)
+        if f.lower().endswith(".safetensors") and not f.startswith(".")
+    )
+
+    def matches(f: str) -> bool:
+        n = f.lower()
+        if role == "qwen35_4b":
+            return "qwen35" in n
+        if role == "qwen3_06b":
+            return "qwen_3_06b" in n or "qwen3_06b" in n
+        return "adapter" in n
+
+    sel_base = os.path.basename(selected).lower()
+    for f in cands:  # 1) 사용자 선택 우선
+        if f.lower() == sel_base and matches(f):
+            return os.path.join(te_dir, f)
+    for f in cands:  # 2) 패턴 매칭 첫 후보
+        if matches(f):
+            return os.path.join(te_dir, f)
+    return None
+
+
 def select_tokenizer_dirs(tokenizer_dirs: list[str]) -> tuple[str, str]:
     """(Qwen3.5 4B용, Qwen3 0.6B용) 토크나이저 디렉토리명 선택.
 
@@ -801,13 +839,11 @@ class Anima38Pipeline:
 
     def _require_pack_files(self) -> dict:
         st = pack_status(self.pack_dir)
+        # DiT 본체는 팩에 필수. TE/어댑터는 없으면
+        # models/text_encoders/ 폴백(_fallback_te_path)으로 메운다.
         missing = []
         if not st["dit"]:
             missing.append("DiT 본체(*3.8*.safetensors)")
-        if not st["qwen35_4b"]:
-            missing.append("qwen35_4b.safetensors")
-        if not st["qwen3_06b"]:
-            missing.append("qwen_3_06b_base.safetensors")
         if missing:
             raise RuntimeError(
                 "Anima 3.8b 팩 파일이 부족해요: " + ", ".join(missing)
@@ -827,7 +863,14 @@ class Anima38Pipeline:
         st = self._require_pack_files()
 
         dit_path = find_dit_file(self.pack_dir)
-        te35_path = os.path.join(self.pack_dir, "qwen35_4b.safetensors")
+        # TE 2개: 팩 우선, 없으면 models/text_encoders/ 폴백
+        te35_path = (os.path.join(self.pack_dir, "qwen35_4b.safetensors")
+                     if st["qwen35_4b"]
+                     else _fallback_te_path("qwen35_4b"))
+        if not te35_path or not os.path.isfile(te35_path):
+            raise RuntimeError(
+                "qwen35_4b.safetensors를 찾을 수 없어요. "
+                "팩 디렉토리나 models/text_encoders/에 넣어주세요.")
         # qwen_3_06b 파일명 대소문자 복원
         te06_name = next(
             (f for f in os.listdir(self.pack_dir)
@@ -835,10 +878,13 @@ class Anima38Pipeline:
              and f.lower().endswith(".safetensors")),
             None,
         )
-        if te06_name is None:
+        te06_path = (os.path.join(self.pack_dir, te06_name)
+                     if te06_name
+                     else _fallback_te_path("qwen3_06b"))
+        if not te06_path or not os.path.isfile(te06_path):
             raise RuntimeError(
-                "qwen_3_06b_base.safetensors를 찾을 수 없어요.")
-        te06_path = os.path.join(self.pack_dir, te06_name)
+                "qwen_3_06b_base.safetensors를 찾을 수 없어요. "
+                "팩 디렉토리나 models/text_encoders/에 넣어주세요.")
 
         # 1) DiT
         dit = build_anima_dit(self._config)
@@ -877,6 +923,7 @@ class Anima38Pipeline:
 
         connector = self._dit.anima_v2_connector
         adapter_name = st["adapter"]
+        apath = None
         if adapter_name:
             apath = next(
                 (os.path.join(self.pack_dir, f)
@@ -884,6 +931,10 @@ class Anima38Pipeline:
                  if f.lower() == adapter_name),
                 None,
             )
+        if apath is None:
+            # 팩에 어댑터가 없으면 models/text_encoders/ 폴백
+            apath = _fallback_te_path("adapter")
+        if apath:
             raw = load_file(apath, device="cpu")
             state = remap_adapter_keys(
                 {k: v.to(dtype) if str(v.dtype).startswith("torch.float")

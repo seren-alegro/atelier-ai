@@ -215,6 +215,31 @@ export async function refreshModels() {
   }
 }
 
+/** GET /api/models/text-encoder — 선택된 텍스트 인코더 (실패 시 null) */
+export async function fetchTextEncoder() {
+  try {
+    const res = await fetch(API_BASE + '/api/models/text-encoder');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/models/text-encoder — 텍스트 인코더 선택 (""이면 해제) */
+export async function setTextEncoder(name) {
+  const res = await fetch(API_BASE + '/api/models/text-encoder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || '' }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || t('api.switchFail'));
+  }
+  return await res.json();
+}
+
 /** POST /api/pose-detect — 사진에서 OpenPose 스켈레톤 추출.
  *  첫 호출 시 모델 다운로드로 수십 초~수 분 걸릴 수 있어 타임아웃을 두지 않는다.
  *  성공 시 base64 PNG 문자열 반환. */

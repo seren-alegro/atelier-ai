@@ -25,6 +25,11 @@ router = APIRouter()
 CHECKPOINT_EXTS = (".safetensors", ".ckpt")
 LORA_DIR_NAMES = ("lora", "loras")
 CONTROLNET_DIR_NAMES = ("controlnet", "controlnets")
+VAE_DIR_NAMES = ("vae", "vaes")
+TEXT_ENCODER_DIR_NAMES = ("text_encoder", "text_encoders")
+#: 팩 판정에서 제외할 특수 폴더 (이 안의 파일은 kind별로만 분류)
+_SPECIAL_DIR_NAMES = (LORA_DIR_NAMES + CONTROLNET_DIR_NAMES
+                      + VAE_DIR_NAMES + TEXT_ENCODER_DIR_NAMES)
 
 _active_name: str | None = None
 
@@ -89,8 +94,13 @@ def _scan() -> list[dict]:
         return items
     for root, dirs, files in os.walk(base):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        rel_root = (os.path.relpath(root, base).replace(os.sep, "/")
+                    if root != base else "")
+        top_dir = rel_root.split("/")[0].lower() if rel_root else ""
         # Anima 3.8b 팩 디렉토리: 파일 목록에 넣지 않고 팩 항목으로만 표시
-        if root != base and looks_like_pack_dir(root):
+        # (text_encoders/·vae/ 등 특수 폴더는 팩 판정에서 제외)
+        if (root != base and top_dir not in _SPECIAL_DIR_NAMES
+                and looks_like_pack_dir(root)):
             rel = os.path.relpath(root, base).replace(os.sep, "/")
             st = pack_status(root)
             total = 0
@@ -129,11 +139,21 @@ def _scan() -> list[dict]:
             is_controlnet = any(
                 p.lower() in CONTROLNET_DIR_NAMES for p in parts[:-1]
             )
+            is_vae = any(
+                p.lower() in VAE_DIR_NAMES for p in parts[:-1]
+            )
+            is_text_encoder = any(
+                p.lower() in TEXT_ENCODER_DIR_NAMES for p in parts[:-1]
+            )
             is_lora = any(
                 p.lower() in LORA_DIR_NAMES for p in parts[:-1]
             ) or "lora" in f.lower()
             if is_controlnet:
                 kind = "controlnet"
+            elif is_vae:
+                kind = "vae"
+            elif is_text_encoder:
+                kind = "text_encoder"
             elif is_lora:
                 kind = "lora"
             else:
@@ -268,6 +288,63 @@ def set_active(req: ActiveRequest):
     _active_name = req.name
     _save_active(req.name)
     return {"active": _active_name}
+
+
+def _te_file() -> str:
+    """선택된 텍스트 인코더 저장 파일. active_model.json과 같은 폴더."""
+    from atelier.api.routes import history as history_module
+    return os.path.join(history_module.data_dir(), "text_encoder.json")
+
+
+def get_selected_text_encoder() -> str | None:
+    """사용자가 선택한 텍스트 인코더 (모델 목록의 name). 없으면 None."""
+    try:
+        with open(_te_file(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    name = data.get("name") if isinstance(data, dict) else None
+    return name if isinstance(name, str) and name else None
+
+
+def _save_text_encoder(name: str | None) -> None:
+    try:
+        with open(_te_file(), "w", encoding="utf-8") as f:
+            json.dump({"name": name}, f)
+    except OSError:
+        pass  # 저장 실패해도 동작은 계속
+
+
+@router.get("/api/models/text-encoder")
+def get_text_encoder():
+    """선택된 텍스트 인코더 조회."""
+    return {"name": get_selected_text_encoder()}
+
+
+class TextEncoderRequest(BaseModel):
+    name: str = ""  # ""이면 선택 해제
+
+
+@router.post("/api/models/text-encoder")
+def set_text_encoder(req: TextEncoderRequest):
+    """텍스트 인코더 선택. Anima 3.8b 팩에 TE 파일이 없을 때 대신 쓴다."""
+    name = (req.name or "").strip()
+    if name:
+        items = _scan()
+        match = next(
+            (m for m in items
+             if m["name"] == name and m["kind"] == "text_encoder"),
+            None,
+        )
+        if match is None:
+            raise HTTPException(
+                status_code=404,
+                detail="텍스트 인코더 파일을 찾을 수 없어요.",
+            )
+        _save_text_encoder(name)
+    else:
+        _save_text_encoder(None)
+    return {"name": get_selected_text_encoder()}
 
 
 @router.delete("/api/models/{name:path}")

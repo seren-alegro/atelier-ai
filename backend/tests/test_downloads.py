@@ -395,3 +395,53 @@ def test_civitai_download_gets_key(client, monkeypatch):
     assert r.status_code == 202
     assert done.wait(timeout=5)
     assert seen.get("api_key") == "secret123"
+
+
+def test_civitai_type_map_vae():
+    from atelier.api.routes.downloads import CIVITAI_TYPE_MAP
+    assert CIVITAI_TYPE_MAP["VAE"] == "vae"
+
+
+def test_download_vae_kind(client, file_server, tmp_path):
+    r = client.post(
+        "/api/downloads",
+        json={"url": f"{file_server}/m.safetensors", "kind": "vae"},
+    )
+    assert r.status_code == 202
+    st = _wait_done(client, r.json()["job_id"])
+    assert st["status"] == "done"
+    assert (tmp_path / "models" / "vae" / "served-model.safetensors").is_file()
+
+
+def test_download_text_encoder_kind(client, file_server, tmp_path):
+    r = client.post(
+        "/api/downloads",
+        json={"url": f"{file_server}/m.safetensors", "kind": "text_encoder"},
+    )
+    assert r.status_code == 202
+    st = _wait_done(client, r.json()["job_id"])
+    assert st["status"] == "done"
+    assert (tmp_path / "models" / "text_encoders"
+            / "served-model.safetensors").is_file()
+
+
+def test_download_kind_auto_vae_by_name(client, file_server, tmp_path):
+    r = client.post(
+        "/api/downloads",
+        json={"url": f"{file_server}/my-vae.safetensors", "kind": "auto"},
+    )
+    assert r.status_code == 202
+    st = _wait_done(client, r.json()["job_id"])
+    assert st["status"] == "done"
+    assert (tmp_path / "models" / "vae" / st["filename"]).is_file()
+
+
+def test_download_kind_auto_text_encoder_by_name(client, file_server, tmp_path):
+    r = client.post(
+        "/api/downloads",
+        json={"url": f"{file_server}/qwen35_4b.safetensors", "kind": "auto"},
+    )
+    assert r.status_code == 202
+    st = _wait_done(client, r.json()["job_id"])
+    assert st["status"] == "done"
+    assert (tmp_path / "models" / "text_encoders" / st["filename"]).is_file()

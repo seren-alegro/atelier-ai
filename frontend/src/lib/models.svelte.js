@@ -1,11 +1,12 @@
 // 모델 목록 공유 스토어 (QuickPanel의 모델 선택 + ModelsTab에서 함께 사용)
-import { fetchModels, setActiveModel, deleteModel, refreshModels } from './api.js';
+import { fetchModels, setActiveModel, deleteModel, refreshModels, fetchTextEncoder, setTextEncoder } from './api.js';
 import { t } from './i18n.svelte.js';
 
 export const modelStore = $state({
   data: null, // {models_dir, active, models: [{name, kind, size_mb, ...}]}
   loading: false,
   notice: '',
+  textEncoder: null, // 선택된 텍스트 인코더 name (없으면 null)
 });
 
 /** GET /api/models — 목록 불러오기 */
@@ -20,6 +21,13 @@ export async function loadModels() {
     return;
   }
   modelStore.data = res;
+  // 선택된 텍스트 인코더도 함께 조회
+  try {
+    const te = await fetchTextEncoder();
+    modelStore.textEncoder = te?.name || null;
+  } catch {
+    modelStore.textEncoder = null;
+  }
 }
 
 /** POST /api/models/refresh — 디렉토리 재스캔 */
@@ -85,4 +93,28 @@ export function loras() {
 /** ControlNet만 */
 export function controlnets() {
   return (modelStore.data?.models ?? []).filter((m) => m.kind === 'controlnet');
+}
+
+/** VAE만 */
+export function vaes() {
+  return (modelStore.data?.models ?? []).filter((m) => m.kind === 'vae');
+}
+
+/** 텍스트 인코더만 */
+export function textEncoders() {
+  return (modelStore.data?.models ?? []).filter((m) => m.kind === 'text_encoder');
+}
+
+/** 텍스트 인코더 선택 (""이면 해제) */
+export async function selectTextEncoder(name) {
+  modelStore.loading = true;
+  modelStore.notice = '';
+  try {
+    const res = await setTextEncoder(name || '');
+    modelStore.textEncoder = res.name || null;
+  } catch (e) {
+    modelStore.notice = e.message || t('mdl.switchFail');
+  } finally {
+    modelStore.loading = false;
+  }
 }

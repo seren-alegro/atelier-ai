@@ -11,6 +11,9 @@
     checkpoints,
     loras,
     controlnets,
+    vaes,
+    textEncoders,
+    selectTextEncoder,
     anima38packs,
   } from './models.svelte.js';
   import { startDownload, fetchDownloadStatus } from './api.js';
@@ -18,6 +21,8 @@
   const cps = $derived(checkpoints());
   const lrs = $derived(loras());
   const cns = $derived(controlnets());
+  const vs = $derived(vaes());
+  const tes = $derived(textEncoders());
   const packs = $derived(anima38packs());
 
   // -- URL 다운로드 ------------------------------------------------------
@@ -126,9 +131,13 @@
     activateModel(name);
   }
 
-  function onDelete(name) {
+  async function onDelete(name) {
     if (!confirm(t('mdl.deleteConfirm', { name }))) return;
-    removeModel(name);
+    await removeModel(name);
+    // 삭제한 파일이 선택된 텍스트 인코더면 선택 해제
+    if (modelStore.textEncoder === name) {
+      await selectTextEncoder('');
+    }
   }
 
   function onRefresh() {
@@ -164,6 +173,8 @@
         <option value="auto">{t('mdl.dlKindAuto')}</option>
         <option value="checkpoint">{t('mdl.dlKindCkpt')}</option>
         <option value="lora">{t('mdl.dlKindLora')}</option>
+        <option value="vae">{t('mdl.dlKindVae')}</option>
+        <option value="text_encoder">{t('mdl.dlKindTe')}</option>
       </select>
       <button
         class="btn"
@@ -200,7 +211,7 @@
   </div>
 
   {#if modelStore.data}
-    {#if cps.length === 0 && lrs.length === 0 && packs.length === 0}
+    {#if cps.length === 0 && lrs.length === 0 && packs.length === 0 && vs.length === 0 && tes.length === 0 && cns.length === 0}
       <div class="gallery-empty">
         {t('mdl.empty')}<br />
         {t('mdl.emptyHint')}<br />
@@ -324,6 +335,72 @@
         <p class="hint">
           {t('mdl.loraHint')}
         </p>
+      {/if}
+
+      <h4>{t('mdl.vaeTitle', { count: vs.length })}</h4>
+      {#if vs.length === 0}
+        <p class="hint">
+          {t('mdl.vaeEmpty')} <code>vae/</code> {t('mdl.putSafetensors')}
+        </p>
+      {/if}
+      <ul class="model-list">
+        {#each vs as m (m.name)}
+          <li class="lora-row">
+            <span class="model-name">{m.name}</span>
+            <span class="model-meta">{fmtSize(m.size_mb)}</span>
+            <button
+              class="btn danger small"
+              onclick={() => onDelete(m.name)}
+              disabled={modelStore.loading}
+            >
+              {t('common.delete')}
+            </button>
+          </li>
+        {/each}
+      </ul>
+
+      <h4>{t('mdl.teTitle', { count: tes.length })}</h4>
+      {#if tes.length === 0}
+        <p class="hint">
+          {t('mdl.teEmpty')} <code>text_encoders/</code> {t('mdl.putSafetensors')}
+        </p>
+      {/if}
+      <ul class="model-list">
+        {#each tes as m (m.name)}
+          <li>
+            <label class="model-row">
+              <input
+                type="radio"
+                name="active-te"
+                checked={modelStore.textEncoder === m.name}
+                onchange={() => selectTextEncoder(m.name)}
+                disabled={modelStore.loading}
+              />
+              <span class="model-name">{m.name}</span>
+              <span class="model-meta">{fmtSize(m.size_mb)}</span>
+              {#if modelStore.textEncoder === m.name}
+                <span class="badge">{t('mdl.teSelected')}</span>
+              {/if}
+            </label>
+            <button
+              class="btn danger small"
+              onclick={() => onDelete(m.name)}
+              disabled={modelStore.loading}
+            >
+              {t('common.delete')}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      {#if tes.length > 0}
+        <p class="hint">{t('mdl.teHint')}</p>
+        <button
+          class="btn small"
+          onclick={() => selectTextEncoder('')}
+          disabled={modelStore.loading || !modelStore.textEncoder}
+        >
+          {t('mdl.teClear')}
+        </button>
       {/if}
 
       <h4>{t('mdl.cnTitle', { count: cns.length })}</h4>

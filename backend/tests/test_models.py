@@ -183,3 +183,62 @@ def test_get_pipeline_output_dir_in_data_dir(client, tmp_path, monkeypatch):
     pipe = gen.get_pipeline()
     assert pipe.output_dir == str(tmp_path / "data" / "outputs")
     gen.set_pipeline(None)
+
+
+def test_scan_classifies_vae_and_text_encoder(client, tmp_path):
+    """vae/·text_encoders/ 폴더의 파일이 kind별로 분류된다."""
+    models_dir = tmp_path / "models"
+    (models_dir / "vae").mkdir()
+    (models_dir / "text_encoders").mkdir()
+    (models_dir / "vae" / "vae.safetensors").write_bytes(b"v")
+    (models_dir / "text_encoders" / "qwen35_4b.safetensors").write_bytes(b"t")
+    r = client.get("/api/models")
+    assert r.status_code == 200
+    by_name = {m["name"]: m for m in r.json()["models"]}
+    assert by_name["vae/vae.safetensors"]["kind"] == "vae"
+    assert by_name["text_encoders/qwen35_4b.safetensors"]["kind"] == "text_encoder"
+
+
+def test_text_encoders_dir_not_misclassified_as_pack(client, tmp_path):
+    """text_encoders/에 qwen35_4b가 있어도 팩으로 오판하지 않는다."""
+    models_dir = tmp_path / "models"
+    (models_dir / "text_encoders").mkdir()
+    (models_dir / "text_encoders" / "qwen35_4b.safetensors").write_bytes(b"t")
+    items = models._scan()
+    assert not [m for m in items if m["kind"] == "anima38pack"]
+    assert [m for m in items if m["kind"] == "text_encoder"]
+
+
+def test_text_encoder_select_and_clear(client, tmp_path):
+    (tmp_path / "models" / "text_encoders").mkdir(parents=True)
+    (tmp_path / "models" / "text_encoders" / "qwen35_4b.safetensors").write_bytes(b"t")
+    r = client.post(
+        "/api/models/text-encoder",
+        json={"name": "text_encoders/qwen35_4b.safetensors"},
+    )
+    assert r.status_code == 200
+    assert r.json()["name"] == "text_encoders/qwen35_4b.safetensors"
+    r = client.get("/api/models/text-encoder")
+    assert r.json()["name"] == "text_encoders/qwen35_4b.safetensors"
+    # 해제
+    r = client.post("/api/models/text-encoder", json={"name": ""})
+    assert r.status_code == 200
+    assert r.json()["name"] is None
+    r = client.get("/api/models/text-encoder")
+    assert r.json()["name"] is None
+
+
+def test_text_encoder_select_missing_404(client):
+    r = client.post(
+        "/api/models/text-encoder",
+        json={"name": "text_encoders/nope.safetensors"},
+    )
+    assert r.status_code == 404
+
+
+def test_text_encoder_select_rejects_checkpoint(client):
+    """text_encoder kind가 아닌 파일은 선택 불가."""
+    r = client.post(
+        "/api/models/text-encoder", json={"name": "anima.safetensors"}
+    )
+    assert r.status_code == 404

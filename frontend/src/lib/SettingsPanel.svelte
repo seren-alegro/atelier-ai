@@ -66,6 +66,10 @@
 </div>
 
 <style>
+  .settings-panel {
+    overflow-y: auto;
+    max-height: 100%;
+  }
   .lang-section {
     margin-top: 1.5rem;
     padding-top: 1rem;
