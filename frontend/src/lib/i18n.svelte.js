@@ -314,6 +314,10 @@ ko: {
 'msel.empty': '모델 없음',
 'msel.packSuffix': '(3.8b 팩)',
 'msel.switching': '전환 중…',
+'msel.checkpoint': '체크포인트',
+'msel.vae': 'VAE',
+'msel.textEncoder': '텍스트 인코더',
+'msel.auto': '자동',
 
 // ---- LoRA 학습 ----
 'train.title': 'LoRA 학습',
@@ -820,6 +824,10 @@ en: {
 'msel.empty': 'No models',
 'msel.packSuffix': '(3.8b pack)',
 'msel.switching': 'Switching…',
+'msel.checkpoint': 'Checkpoint',
+'msel.vae': 'VAE',
+'msel.textEncoder': 'Text encoder',
+'msel.auto': 'Auto',
 
 // ---- LoRA training ----
 'train.title': 'Train LoRA',
@@ -1326,6 +1334,10 @@ ja: {
 'msel.empty': 'モデルなし',
 'msel.packSuffix': '（3.8bパック）',
 'msel.switching': '切り替え中…',
+'msel.checkpoint': 'チェックポイント',
+'msel.vae': 'VAE',
+'msel.textEncoder': 'テキストエンコーダー',
+'msel.auto': '自動',
 
 // ---- LoRA training ----
 'train.title': 'LoRA学習',

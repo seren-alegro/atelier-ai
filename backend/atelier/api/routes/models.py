@@ -347,6 +347,74 @@ def set_text_encoder(req: TextEncoderRequest):
     return {"name": get_selected_text_encoder()}
 
 
+def _vae_file() -> str:
+    """선택된 VAE 저장 파일."""
+    from atelier.api.routes import history as history_module
+    return os.path.join(history_module.data_dir(), "vae.json")
+
+
+def get_selected_vae() -> str | None:
+    """사용자가 선택한 VAE (모델 목록의 name). 없으면 None."""
+    try:
+        with open(_vae_file(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    name = data.get("name") if isinstance(data, dict) else None
+    return name if isinstance(name, str) and name else None
+
+
+def get_selected_vae_path() -> str | None:
+    """선택된 VAE의 절대 경로. 파일이 없으면 None."""
+    name = get_selected_vae()
+    if not name:
+        return None
+    try:
+        return _resolve(name)
+    except HTTPException:
+        return None
+
+
+def _save_vae(name: str | None) -> None:
+    try:
+        with open(_vae_file(), "w", encoding="utf-8") as f:
+            json.dump({"name": name}, f)
+    except OSError:
+        pass  # 저장 실패해도 동작은 계속
+
+
+@router.get("/api/models/vae")
+def get_vae():
+    """선택된 VAE 조회."""
+    return {"name": get_selected_vae()}
+
+
+class VaeRequest(BaseModel):
+    name: str = ""  # ""이면 선택 해제
+
+
+@router.post("/api/models/vae")
+def set_vae(req: VaeRequest):
+    """VAE 선택. Anima 3.8b 팩의 VAE 대신 쓴다."""
+    name = (req.name or "").strip()
+    if name:
+        items = _scan()
+        match = next(
+            (m for m in items
+             if m["name"] == name and m["kind"] == "vae"),
+            None,
+        )
+        if match is None:
+            raise HTTPException(
+                status_code=404,
+                detail="VAE 파일을 찾을 수 없어요.",
+            )
+        _save_vae(name)
+    else:
+        _save_vae(None)
+    return {"name": get_selected_vae()}
+
+
 @router.delete("/api/models/{name:path}")
 def delete_model(name: str):
     """모델 파일 삭제. 사용 중인 활성 모델은 삭제할 수 없다."""

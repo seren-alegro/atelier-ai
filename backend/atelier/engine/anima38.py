@@ -953,13 +953,25 @@ class Anima38Pipeline:
         candidates = []
         if self.vae_path:
             candidates.append(self.vae_path)
+        # 사용자가 고른 VAE (모델 탭/퀵 패널) — 팩 내장보다 우선
+        try:
+            from atelier.api.routes import models as models_module
+            sel_vae = models_module.get_selected_vae_path()
+        except Exception:  # noqa: BLE001 - 폴백은 조용히 포기
+            sel_vae = None
+        if sel_vae:
+            candidates.insert(0, sel_vae)
         pack_vae = os.path.join(self.pack_dir, "vae")
         if os.path.isdir(pack_vae):
             candidates.append(pack_vae)
         for cand in candidates:
             try:
-                vae = AutoencoderKL.from_pretrained(
-                    cand, torch_dtype=dtype, trust_remote_code=False)
+                if os.path.isdir(cand):
+                    vae = AutoencoderKL.from_pretrained(
+                        cand, torch_dtype=dtype, trust_remote_code=False)
+                else:
+                    vae = AutoencoderKL.from_single_file(
+                        cand, torch_dtype=dtype, trust_remote_code=False)
                 vae.to(device=device, dtype=dtype)
                 vae.eval()
                 return vae

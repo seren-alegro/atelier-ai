@@ -96,6 +96,7 @@ SETTINGS: list[Setting] = [
         kind="choice",
         options=["er_sde",
                  "euler", "euler_ancestral",
+                 "flow_euler", "res_multistep",
                  "dpmpp_2m", "dpmpp_2m_karras",
                  "dpmpp_2s_ancestral", "dpmpp_2s_ancestral_karras",
                  "dpmpp_sde", "dpmpp_sde_karras",

@@ -242,3 +242,23 @@ def test_text_encoder_select_rejects_checkpoint(client):
         "/api/models/text-encoder", json={"name": "anima.safetensors"}
     )
     assert r.status_code == 404
+
+
+def test_vae_select_and_clear(client, tmp_path):
+    (tmp_path / "models" / "vae").mkdir(parents=True)
+    (tmp_path / "models" / "vae" / "vae.safetensors").write_bytes(b"v")
+    r = client.post(
+        "/api/models/vae", json={"name": "vae/vae.safetensors"}
+    )
+    assert r.status_code == 200
+    assert r.json()["name"] == "vae/vae.safetensors"
+    assert client.get("/api/models/vae").json()["name"] == "vae/vae.safetensors"
+    assert models.get_selected_vae_path().endswith("vae.safetensors")
+    r = client.post("/api/models/vae", json={"name": ""})
+    assert r.json()["name"] is None
+    assert models.get_selected_vae_path() is None
+
+
+def test_vae_select_rejects_non_vae(client):
+    r = client.post("/api/models/vae", json={"name": "anima.safetensors"})
+    assert r.status_code == 404

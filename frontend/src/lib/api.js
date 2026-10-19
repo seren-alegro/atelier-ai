@@ -240,6 +240,31 @@ export async function setTextEncoder(name) {
   return await res.json();
 }
 
+/** GET /api/models/vae — 선택된 VAE (실패 시 null) */
+export async function fetchVae() {
+  try {
+    const res = await fetch(API_BASE + '/api/models/vae');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/models/vae — VAE 선택 (""이면 해제) */
+export async function setVae(name) {
+  const res = await fetch(API_BASE + '/api/models/vae', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name || '' }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || t('api.switchFail'));
+  }
+  return await res.json();
+}
+
 /** POST /api/pose-detect — 사진에서 OpenPose 스켈레톤 추출.
  *  첫 호출 시 모델 다운로드로 수십 초~수 분 걸릴 수 있어 타임아웃을 두지 않는다.
  *  성공 시 base64 PNG 문자열 반환. */
