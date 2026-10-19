@@ -14,6 +14,7 @@
     vaes,
     textEncoders,
     selectTextEncoder,
+    selectVae,
     anima38packs,
   } from './models.svelte.js';
   import { startDownload, fetchDownloadStatus } from './api.js';
@@ -134,9 +135,12 @@
   async function onDelete(name) {
     if (!confirm(t('mdl.deleteConfirm', { name }))) return;
     await removeModel(name);
-    // 삭제한 파일이 선택된 텍스트 인코더면 선택 해제
+    // 삭제한 파일이 선택된 텍스트 인코더·VAE면 선택 해제
     if (modelStore.textEncoder === name) {
       await selectTextEncoder('');
+    }
+    if (modelStore.vae === name) {
+      await selectVae('');
     }
   }
 
@@ -345,9 +349,21 @@
       {/if}
       <ul class="model-list">
         {#each vs as m (m.name)}
-          <li class="lora-row">
-            <span class="model-name">{m.name}</span>
-            <span class="model-meta">{fmtSize(m.size_mb)}</span>
+          <li>
+            <label class="model-row">
+              <input
+                type="radio"
+                name="active-vae"
+                checked={modelStore.vae === m.name}
+                onchange={() => selectVae(m.name)}
+                disabled={modelStore.loading}
+              />
+              <span class="model-name">{m.name}</span>
+              <span class="model-meta">{fmtSize(m.size_mb)}</span>
+              {#if modelStore.vae === m.name}
+                <span class="badge">{t('mdl.teSelected')}</span>
+              {/if}
+            </label>
             <button
               class="btn danger small"
               onclick={() => onDelete(m.name)}
@@ -358,6 +374,16 @@
           </li>
         {/each}
       </ul>
+      {#if vs.length > 0}
+        <p class="hint">{t('mdl.vaeHint')}</p>
+        <button
+          class="btn small"
+          onclick={() => selectVae('')}
+          disabled={modelStore.loading || !modelStore.vae}
+        >
+          {t('msel.auto')}
+        </button>
+      {/if}
 
       <h4>{t('mdl.teTitle', { count: tes.length })}</h4>
       {#if tes.length === 0}
@@ -399,7 +425,7 @@
           onclick={() => selectTextEncoder('')}
           disabled={modelStore.loading || !modelStore.textEncoder}
         >
-          {t('mdl.teClear')}
+          {t('msel.auto')}
         </button>
       {/if}
 
