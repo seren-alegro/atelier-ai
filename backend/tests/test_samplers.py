@@ -45,7 +45,7 @@ def test_expected_sampler_names():
         "dpmpp_3m_sde", "dpmpp_3m_sde_karras",
         "dpm_fast", "dpm_adaptive", "plms", "unipc",
         # rectified-flow 2b용
-        "flow_euler", "res_multistep",
+        "flow_euler",
     }
 
 
@@ -67,7 +67,6 @@ def test_approximate_mappings_disclose():
         "dpmpp_2m_sde_heun_karras",
         "dpmpp_3m_sde", "dpmpp_3m_sde_karras",
         "dpm_fast", "dpm_adaptive",
-        "res_multistep",
     }
     for name in approx:
         spec = SAMPLER_MAP[name]

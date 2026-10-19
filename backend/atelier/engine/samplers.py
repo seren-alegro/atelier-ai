@@ -205,19 +205,13 @@ SAMPLER_MAP: dict[str, SamplerSpec] = {
         note="정확 대응. A1111 'UniPC'.",
     ),
     # --- Rectified-flow 2b용 (Comfyui-anima-sampler 지원 목적) ---
+    # res_multistep은 근사 매핑 대신 나중에 직접 내장 예정
+    # (ComfyUI/k_diffusion 샘플링 연산 로직 추출·통합)
     "flow_euler": SamplerSpec(
         scheduler="FlowMatchEulerDiscreteScheduler",
         kwargs={"shift": 3.0},
         note="정확 대응. Anima-Base-v1.0-Diffusers 공식 기본 스케줄 "
              "(flow_diffusers_linear_shift, shift 3.0). rectified-flow 2b용.",
-    ),
-    "res_multistep": SamplerSpec(
-        scheduler="FlowMatchEulerDiscreteScheduler",
-        kwargs={"shift": 3.0},
-        approximate=True,
-        note="근사 매핑, 실측 필요. RES4LYF res_multistep(RF multistep)의 "
-             "diffusers 직접 대응이 없어 같은 RF 계열의 FlowMatchEuler로 근사. "
-             "차수 차이로 결과가 다를 수 있음.",
     ),
 }
 
