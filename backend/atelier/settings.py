@@ -117,6 +117,21 @@ SETTINGS: list[Setting] = [
                        "必要があります（restartは遅いが綺麗に、lcm/tcdは数ステップで描きます）。",
     ),
     Setting(
+        key="scheduler",
+        label="스케줄러",
+        description="노이즈를 줄여나가는 간격이에요. auto는 샘플러 기본값을 써요.",
+        recommended="auto",
+        kind="choice",
+        options=["auto", "normal", "karras", "simple", "sgm_uniform",
+                 "exponential", "ddim_uniform", "beta",
+                 "linear_quadratic", "bong_tangent"],
+        label_en="Scheduler",
+        description_en="The noise reduction pacing (ComfyUI-style). "
+                       "auto uses the sampler default.",
+        label_ja="スケジューラ",
+        description_ja="ノイズを減らしていく間隔です。autoはサンプラーの既定値を使います。",
+    ),
+    Setting(
         key="width",
         label="가로",
         description="그림의 가로 크기예요. 클수록 VRAM을 많이 써요.",

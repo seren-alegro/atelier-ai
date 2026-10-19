@@ -66,6 +66,8 @@
   );
   const cfgMeta = $derived(store.meta.find((s) => s.key === 'cfg_scale'));
   const stepsMeta = $derived(store.meta.find((s) => s.key === 'steps'));
+  const schedulerMeta = $derived(store.meta.find((s) => s.key === 'scheduler'));
+  const schedulerOptions = $derived(schedulerMeta?.options ?? []);
 
   // 기본 모드에 보이는 키: 프롬프트(중앙)·도우미·모델·해상도
   // 고급 설정에 들어가는 키: 샘플러·CFG·스텝 + 나머지 전부
@@ -206,13 +208,21 @@
         {t('qp.schedulerLabel')}: {samplerInfo.scheduler}{samplerInfo.approximate ? ` ${t('qp.approxSuffix')}` : ''}
       </div>
     {/if}
+    {#if schedulerOptions.length > 0}
+      <div class="qp-sub">{t('qp.noiseScheduleTitle')}</div>
+      <select class="select" bind:value={store.values.scheduler} aria-label={t('qp.noiseScheduleAria')}>
+        {#each schedulerOptions as opt (opt)}
+          <option value={opt}>{t(`qp.sched_${opt}`)}</option>
+        {/each}
+      </select>
+    {/if}
     {#if cfgMeta}
       <QuickSlider setting={cfgMeta} />
     {/if}
     {#if stepsMeta}
       <QuickSlider setting={stepsMeta} />
     {/if}
-    {#each advancedSettings.filter((s) => !['sampler', 'cfg_scale', 'steps', ...HIRES_FIX_KEYS].includes(s.key)) as setting (setting.key)}
+    {#each advancedSettings.filter((s) => !['sampler', 'scheduler', 'cfg_scale', 'steps', ...HIRES_FIX_KEYS].includes(s.key)) as setting (setting.key)}
       <SettingField {setting} bind:value={store.values[setting.key]} />
     {/each}
   </div>

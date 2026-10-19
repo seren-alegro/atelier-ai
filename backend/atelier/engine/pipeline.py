@@ -137,7 +137,8 @@ class Pipeline:
         """검증 + 스케줄러 적용 + 공통 인자 생성."""
         pipe = self._require_pipe()
         sampler_name = params.get(sampler_key, defaults()[sampler_key])
-        apply_scheduler(pipe, sampler_name)
+        noise_schedule = params.get("scheduler", defaults()["scheduler"])
+        apply_scheduler(pipe, sampler_name, noise_schedule)
         kwargs, seed = self._common_kwargs(params)
         return pipe, kwargs, seed
 
@@ -297,7 +298,8 @@ class Pipeline:
         pipe = self._controlnet_pipes[ref]
 
         sampler_name = p.get("sampler", defaults()["sampler"])
-        apply_scheduler(pipe, sampler_name)
+        noise_schedule = p.get("scheduler", defaults()["scheduler"])
+        apply_scheduler(pipe, sampler_name, noise_schedule)
         self._apply_loras(pipe, loras)
         kwargs, seed = self._common_kwargs(p)
         images = pipe(image=Image.open(control_image).convert("RGB"),

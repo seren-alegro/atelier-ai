@@ -1055,7 +1055,11 @@ class Anima38Pipeline:
 
         kwargs, seed = self._common_kwargs(params)
         sampler_name = params.get("sampler", _defaults()["sampler"])
+        noise_schedule = params.get("scheduler", _defaults()["scheduler"])
+        from atelier.engine.samplers import _NoiseScheduleWrapper
         scheduler = build_scheduler(sampler_name)
+        if noise_schedule not in (None, "auto", "normal"):
+            scheduler = _NoiseScheduleWrapper(scheduler, noise_schedule)
         scheduler.set_timesteps(kwargs["num_inference_steps"])
 
         cond, neg_cond = self.encode_prompt(kwargs["prompt"],

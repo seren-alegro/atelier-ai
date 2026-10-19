@@ -39,6 +39,14 @@ def test_sampler_options_expected():
     assert s.recommended == "er_sde"
 
 
+def test_scheduler_options_expected():
+    s = get_setting("scheduler")
+    assert s.options == ["auto", "normal", "karras", "simple", "sgm_uniform",
+                        "exponential", "ddim_uniform", "beta",
+                        "linear_quadratic", "bong_tangent"]
+    assert s.recommended == "auto"
+
+
 def test_steps_bounds():
     s = get_setting("steps")
     assert (s.min, s.max, s.recommended) == (20, 50, 50)
