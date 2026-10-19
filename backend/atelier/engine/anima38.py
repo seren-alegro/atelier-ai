@@ -1507,7 +1507,7 @@ class Anima2BPipeline:
         from diffusers import AutoencoderKLQwenImage
         from safetensors.torch import load_file
         # Qwen-Image VAE: from_single_file 미지원이라 수동 로드
-        vae = AutoencoderKLQwenImage(torch_dtype=dtype)
+        vae = AutoencoderKLQwenImage()
         state = load_file(vae_path, device="cpu")
         # 키 매핑이 필요하면 여기서 처리
         vae.load_state_dict(state, strict=False)
