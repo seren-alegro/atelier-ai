@@ -45,7 +45,7 @@ def test_expected_sampler_names():
         "dpmpp_3m_sde", "dpmpp_3m_sde_karras",
         "dpm_fast", "dpm_adaptive", "plms", "unipc",
         # rectified-flow 2b용
-        "flow_euler",
+        "flow_euler", "res_multistep",
     }
 
 

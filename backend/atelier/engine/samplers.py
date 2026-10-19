@@ -19,8 +19,17 @@ SAMPLER_ALIASES는 A1111 표시 이름("Euler a" 등)과 ComfyUI 이름("dpm_2" 
 
 from __future__ import annotations
 
+import importlib
 import re
 from dataclasses import dataclass, field
+
+
+#: diffusers에 없는 커스텀 스케줄러 레지스트리
+#: {스케줄러명: (모듈 경로, 클래스명)}
+_CUSTOM_SCHEDULERS = {
+    "ResMultistepScheduler": (
+        "atelier.engine.res_multistep", "ResMultistepScheduler"),
+}
 
 
 @dataclass(frozen=True)
@@ -205,13 +214,19 @@ SAMPLER_MAP: dict[str, SamplerSpec] = {
         note="정확 대응. A1111 'UniPC'.",
     ),
     # --- Rectified-flow 2b용 (Comfyui-anima-sampler 지원 목적) ---
-    # res_multistep은 근사 매핑 대신 나중에 직접 내장 예정
-    # (ComfyUI/k_diffusion 샘플링 연산 로직 추출·통합)
+    # res_multistep은 나중에 ComfyUI/k_diffusion 로직 직접 내장 예정이었으나,
+    # exponential multistep 수식을 클린룸으로 재구현하여 내장함
+    # (atelier/engine/res_multistep.py — 원본 코드 복사 없음)
     "flow_euler": SamplerSpec(
         scheduler="FlowMatchEulerDiscreteScheduler",
         kwargs={"shift": 3.0},
         note="정확 대응. Anima-Base-v1.0-Diffusers 공식 기본 스케줄 "
              "(flow_diffusers_linear_shift, shift 3.0). rectified-flow 2b용.",
+    ),
+    "res_multistep": SamplerSpec(
+        scheduler="ResMultistepScheduler",
+        note="직접 내장 (클린룸 구현). RES res_2m 계열의 exponential "
+             "integrator + phi 가중 2차 multistep. GPU 실측 필요.",
     ),
 }
 
@@ -306,16 +321,25 @@ def resolve_sampler(name: str) -> SamplerSpec:
 
 
 def build_scheduler(name: str, base_config=None):
-    """diffusers 스케줄러 인스턴스를 생성한다.
+    """스케줄러 인스턴스를 생성한다.
 
+    diffusers 네이티브 스케줄러는 클래스명으로 가져오고,
+    _CUSTOM_SCHEDULERS에 등록된 것은 직접 구현 모듈에서 가져온다.
     base_config가 주어지면(보통 파이프라인의 기존 스케줄러 config)
-    from_config로 베타 스케줄 등을 계승한다.
-    diffusers는 여기서 lazy import하므로, 이 모듈 자체는
+    diffusers 스케줄러는 from_config로 베타 스케줄 등을 계승한다
+    (커스텀 스케줄러는 base_config 무시).
+    torch/diffusers는 여기서 lazy import하므로, 이 모듈 자체는
     torch/diffusers 없이 import 가능하다.
     """
+    spec = resolve_sampler(name)
+    if spec.scheduler in _CUSTOM_SCHEDULERS:
+        mod_name, cls_name = _CUSTOM_SCHEDULERS[spec.scheduler]
+        mod = importlib.import_module(mod_name)
+        cls = getattr(mod, cls_name)
+        return cls(**spec.kwargs)
+
     import diffusers  # lazy import: 테스트 환경엔 없어도 됨
 
-    spec = resolve_sampler(name)
     cls = getattr(diffusers, spec.scheduler)
     if base_config is not None:
         return cls.from_config(base_config, **spec.kwargs)
