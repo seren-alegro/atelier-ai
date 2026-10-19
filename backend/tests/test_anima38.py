@@ -303,6 +303,19 @@ def test_scan_partial_pack_still_listed(tmp_path, monkeypatch):
     assert st["tokenizer_dirs"] == []
 
 
+def test_pack_status_detects_vae_file(tmp_path):
+    """팩 루트의 *vae*.safetensors도 VAE로 인식."""
+    from atelier.engine.anima38 import pack_status
+
+    pack = os.path.join(str(tmp_path), "p")
+    os.makedirs(pack, exist_ok=True)
+    with open(os.path.join(pack, "qwenImageVAE.safetensors"), "wb") as fh:
+        fh.write(b"x" * 64)
+    st = pack_status(pack)
+    assert st["vae_file"] == "qwenimagevae.safetensors"
+    assert st["vae_dir"] is False
+
+
 # -- 파이프라인 동작 ---------------------------------------------------------------
 
 class FakePipelineOK:

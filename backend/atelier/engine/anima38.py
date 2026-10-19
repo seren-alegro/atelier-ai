@@ -183,6 +183,11 @@ def pack_status(dir_path: str) -> dict:
         "adapter": adapter[0] if adapter else None,
         "tokenizer_dirs": tok_dirs,
         "vae_dir": "vae" in dirs,
+        "vae_file": next(
+            (f for f in files
+             if f.endswith(".safetensors") and "vae" in f),
+            None,
+        ),
     }
 
 
@@ -964,6 +969,16 @@ class Anima38Pipeline:
         pack_vae = os.path.join(self.pack_dir, "vae")
         if os.path.isdir(pack_vae):
             candidates.append(pack_vae)
+        # 팩 루트에 바로 있는 VAE 파일 (예: qwenImageVAE.safetensors)
+        try:
+            for f in os.listdir(self.pack_dir):
+                if (f.lower().endswith(".safetensors")
+                        and "vae" in f.lower()
+                        and not f.startswith(".")):
+                    candidates.append(os.path.join(self.pack_dir, f))
+                    break
+        except OSError:
+            pass
         for cand in candidates:
             try:
                 if os.path.isdir(cand):

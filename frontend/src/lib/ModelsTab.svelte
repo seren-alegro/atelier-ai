@@ -104,7 +104,7 @@
         label: t('mdl.packTok'),
         ok: (st.tokenizer_dirs ?? []).length > 0,
       },
-      { label: t('mdl.packVae'), ok: !!st.vae_dir },
+      { label: t('mdl.packVae'), ok: !!st.vae_dir || !!st.vae_file },
     ];
   }
 
@@ -261,8 +261,20 @@
           {#each packs as p (p.name)}
             <li class="pack-row">
               <div class="pack-head">
-                <span class="model-name">{p.name}</span>
-                <span class="model-meta">{fmtSize(p.size_mb)}</span>
+                <label class="model-row">
+                  <input
+                    type="radio"
+                    name="active-model"
+                    checked={modelStore.data.active === p.name}
+                    onchange={() => onSelect(p.name)}
+                    disabled={modelStore.loading}
+                  />
+                  <span class="model-name">{p.name}</span>
+                  <span class="model-meta">{fmtSize(p.size_mb)}</span>
+                  {#if modelStore.data.active === p.name}
+                    <span class="badge">{t('mdl.active')}</span>
+                  {/if}
+                </label>
               </div>
               <ul class="pack-parts">
                 {#each packRows(p) as row}
