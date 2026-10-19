@@ -894,18 +894,32 @@ def dequantize_fp8_state_dict(path: str, target_dtype: str = "bfloat16") -> dict
 def load_qwen3_te(path: str, dtype: str = "bfloat16"):
     """Qwen3 0.6B TE 로드 (표준 Qwen3 레이아웃 — 덤프 실측).
 
-    transformers Qwen3Model로 직접 로드한다.
-    NOTE: `import transformers` + 속성 접근을 쓴다.
-    `from transformers import X` 형태는 transformers의 lazy 모듈에서
-    monkeypatch가 안정적으로 동작하지 않는 경우가 있어 테스트를 위해
-    이 형태를 사용한다.
+    체크포인트는 `model.` prefix가 있는 단독 .safetensors 파일이므로
+    config를 직접 만들고 state_dict를 읽어 로드한다.
+    (from_pretrained는 디렉토리/config.json를 요구해서 사용 불가)
     """
     import torch
     import transformers
+    from safetensors.torch import load_file
 
-    model = transformers.Qwen3Model.from_pretrained(
-        path, torch_dtype=getattr(torch, dtype), trust_remote_code=False,
+    # Qwen3-0.6B 실측 (q_proj [2048,1024]=16×128, v_proj [1024,1024]=8×128)
+    config = transformers.Qwen3Config(
+        vocab_size=151936,
+        hidden_size=1024,
+        intermediate_size=3072,
+        num_hidden_layers=28,
+        num_attention_heads=16,
+        num_key_value_heads=8,
+        head_dim=128,
+        max_position_embeddings=40960,
     )
+    model = transformers.Qwen3Model(config)
+    state = load_file(path, device="cpu")
+    # `model.` prefix 제거 (Qwen3Model은 prefix 없음)
+    state = {k[6:] if k.startswith("model.") else k: v
+             for k, v in state.items()}
+    model.load_state_dict(state, strict=False)
+    model.to(dtype=getattr(torch, dtype))
     model.eval()
     return model
 
